@@ -1,17 +1,12 @@
-## Open Source Ethereum Mining Pool
+## Ethash Mining Pool for QuarkChain
 
-![Miner's stats page](https://user-images.githubusercontent.com/7374093/31591180-43c72364-b236-11e7-8d47-726cd66b876a.png)
-
-[![Join the chat at https://gitter.im/sammy007/open-ethereum-pool](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/sammy007/open-ethereum-pool?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://travis-ci.org/sammy007/open-ethereum-pool.svg?branch=develop)](https://travis-ci.org/sammy007/open-ethereum-pool) [![Go Report Card](https://goreportcard.com/badge/github.com/sammy007/open-ethereum-pool)](https://goreportcard.com/report/github.com/sammy007/open-ethereum-pool)
 
 ### Features
 
-**This pool is being further developed to provide an easy to use pool for Ethereum miners. This software is functional however an optimised release of the pool is expected soon. Testing and bug submissions are welcome!**
+**This pool is being further developed to provide an easy to use pool for QuarkChain Ethash miners. This software is functional however an optimised release of the pool is expected soon. Testing and bug submissions are welcome!**
 
 * Support for HTTP and Stratum mining
-* Detailed block stats with luck percentage and full reward
-* Failover geth instances: geth high availability built in
-* Modern beautiful Ember.js frontend
+* Support failover pool
 * Separate stats for workers: can highlight timed-out workers so miners can perform maintenance of rigs
 * JSON-API for stats
 
@@ -20,84 +15,172 @@
 * [Ether-Proxy](https://github.com/sammy007/ether-proxy) HTTP proxy with web interface
 * [Stratum Proxy](https://github.com/Atrides/eth-proxy) for Ethereum
 
-### Building on Linux
+## Building on Linux
 
 Dependencies:
-
+  * VPS with at least 2G of Ram
+  * Disk space > 50G
   * go >= 1.9
-  * geth or parity
+  * pyquarkchain
   * redis-server >= 2.8.0
-  * nodejs >= 4 LTS
-  * nginx
+  
 
-**I highly recommend to use Ubuntu 16.04 LTS.**
+**I highly recommend to use Ubuntu 18.04 LTS.**
 
-First install  [go-ethereum](https://github.com/ethereum/go-ethereum/wiki/Installation-Instructions-for-Ubuntu).
+## AWS AMI (Private)
+QuarkChain Ethash Stratum Pool (ami-02a5fe1b1c1a9d211) -- Oregon
+  
+### Update
 
-Clone & compile:
+    $ sudo apt-get update
+    $ sudo apt-get dist-upgrade
+    $ sudo apt-get install build-essential make
+    $ sudo reboot
 
-    git config --global http.https://gopkg.in.followRedirects true
-    git clone https://github.com/sammy007/open-ethereum-pool.git
-    cd open-ethereum-pool
-    make
+## Install GoLang
 
-Install redis-server.
+    $ wget https://dl.google.com/go/go1.10.2.linux-amd64.tar.gz
+    $ sudo tar -xvf go1.10.2.linux-amd64.tar.gz
+    $ sudo mv go /usr/local
+    $ sudo vim ~/.profile
+    
+    
+~/.profile
 
-### Running Pool
+    ...
+    # set PATH so it includes user's private bin directories
+    PATH="$HOME/bin:$HOME/.local/bin:$PATH"
+    export PATH=$PATH:/usr/local/go/bin
+    
+    
+Check the go version
 
-    ./build/bin/open-ethereum-pool config.json
+    $ source ~/.profile
+    $ go version
+    go version go1.10.2 linux/amd64
+
+## Installing Redis and Test
+
+### Build and Install Redis
+
+    $ sudo apt-get update
+    $ sudo apt-get install build-essential tcl
+    $ curl -O http://download.redis.io/redis-stable.tar.gz
+    $ tar xzvf redis-stable.tar.gz
+    $ cd redis-stable
+    $ make
+    $ make test
+    $ sudo make install
+
+### Configure Redis
+
+    $ sudo mkdir /etc/redis
+    $ sudo cp ~/redis-stable/redis.conf /etc/redis
+    $ sudo vim /etc/redis/redis.conf
+    
+/etc/redis/redis.conf
+
+    . . .
+
+    # Set supervised to systemd
+    supervised systemd
+
+    # Set the dir
+    dir /var/lib/redis
+
+    . . .
+    
+### Create a Redis systemed Unit File
+
+    $ sudo vim /etc/systemd/system/redis.service
+    
+/etc/systemd/system/redis.service
+
+    [Unit]
+     Description=Redis In-Memory Data Store
+     After=network.target
+
+     [Service]
+     User=redis
+     Group=redis
+     ExecStart=/usr/local/bin/redis-server /etc/redis/redis.conf
+     ExecStop=/usr/local/bin/redis-cli shutdown
+     Restart=always
+
+    [Install]
+    WantedBy=multi-user.target
+
+### Create the Redis User, Group and Directories
+
+    $ sudo adduser --system --group --no-create-home redis
+    $ sudo mkdir /var/lib/redis
+    $ sudo chown redis:redis /var/lib/redis
+    $ sudo chmod 770 /var/lib/redis
+    
+### Start and Test Redis
+
+    $ sudo systemctl start redis
+    $ sudo systemctl status redis
+    
+### Test the Redis Instance Functionality
+
+    $ redis-cli
+    $ ping
+    PONG
+    $ exit
+    
+### Enable Redis to Start at Boot
+
+    $ sudo systemctl enable redis
+    
+
+
+## Run a full QuarkChain cluster
+
+First install  [pyquarkchain](https://github.com/QuarkChain/pyquarkchain.git).
+
+    $ git clone https://github.com/QuarkChain/pyquarkchain.git
+    $ cd pyquarkchain
+    $ python3 quarkchain/cluster/cluster.py --cluster_config /path/to/cluster_config_template.json
+
+It will start sync process depend on speed of your server it may take time to completely sync. 
+You can use the quick sync by following the [instructions](https://github.com/QuarkChain/pyquarkchain/wiki/Run-a-Private-Cluster-on-the-QuarkChain-Testnet-2.0).
+## Running Ethash Pool
+    $ git clone https://github.com/QuarkChain/mining.git
+    $ cd mining
+    $ make
+    $ git branch Ethash_pool
+    # Edit the config.json for different shard setting
+    $ ./build/bin/open-ethereum-pool config.example_Ethash.json
 
 You can use Ubuntu upstart - check for sample config in <code>upstart.conf</code>.
 
-### Building Frontend
 
-Install nodejs. I suggest using LTS version >= 4.x from https://github.com/nodesource/distributions or from your Linux distribution or simply install nodejs on Ubuntu Xenial 16.04.
+### Check the mining state
+The payout functions and the web UI do not work currently. You can achieve the mining state by reading from the redis database. 
 
-The frontend is a single-page Ember.js application that polls the pool API to render miner stats.
+    python3 redis_check_mining_state.py --port 6379
+    
+### Ethash and Qkchash pool port configuration
+Pool IP is 54.202.245.214
 
-    cd www
+|Chains |Hash Algorithm |Stratum port| Proxy port | API port(web server) | redis port
+| ---      | ---       | --- | --- | --- | --- |
+| Root Chain     | Not supported | Not supported | Not supported | Not supported | Not supported | 
+| Shard 0       | Ethash       | 8008 | 8888 | 8080 | 6380 | 
+| Shard 1       | Ethash       | 8018 | 8881 | 8081 | 6381 | 
+| Shard 2       | Ethash       | 8028 | 8882 | 8082 | 6382 | 
+| Shard 3       | Ethash       | 8038 | 8883 | 8083 | 6383 | 
+| Shard 6       | Qkchash      | 8068 | 8886 | 8086 | 6386 | 
+| Shard 7       | Qkchash      | 8078 | 8887 | 8087 | 6379 | 
 
-Change <code>ApiUrl: '//example.net/'</code> in <code>www/config/environment.js</code> to match your domain name. Also don't forget to adjust other options.
 
-    npm install -g ember-cli@2.9.1
-    npm install -g bower
-    npm install
-    bower install
-    ./build.sh
-
-Configure nginx to serve API on <code>/api</code> subdirectory.
-Configure nginx to serve <code>www/dist</code> as static website.
-
-#### Serving API using nginx
-
-Create an upstream for API:
-
-    upstream api {
-        server 127.0.0.1:8080;
-    }
-
-and add this setting after <code>location /</code>:
-
-    location /api {
-        proxy_pass http://api;
-    }
-
-#### Customization
-
-You can customize the layout using built-in web server with live reload:
-
-    ember server --port 8082 --environment development
-
-**Don't use built-in web server in production**.
-
-Check out <code>www/app/templates</code> directory and edit these templates
-in order to customise the frontend.
 
 ### Configuration
 
 Configuration is actually simple, just read it twice and think twice before changing defaults.
 
-**Don't copy config directly from this manual. Use the example config from the package,
+**Don't copy config directly from this manual. Use the config.example_Ethash.json from the package,
 otherwise you will get errors on start because of JSON comments.**
 
 ```javascript
@@ -105,7 +188,7 @@ otherwise you will get errors on start because of JSON comments.**
   // Set to the number of CPU cores of your server
   "threads": 2,
   // Prefix for keys in redis store
-  "coin": "eth",
+  "coin": "qkc",
   // Give unique name to each instance
   "name": "main",
 
@@ -131,7 +214,9 @@ otherwise you will get errors on start because of JSON comments.**
       // Bind stratum mining socket to this IP:PORT
       "listen": "0.0.0.0:8008",
       "timeout": "120s",
-      "maxConn": 8192
+      "maxConn": 8192,
+      // Fill in the shard Id here
+      "shardId": "0x0",
     },
 
     // Try to get new job from geth in this interval
@@ -218,12 +303,12 @@ otherwise you will get errors on start because of JSON comments.**
   "upstream": [
     {
       "name": "main",
-      "url": "http://127.0.0.1:8545",
+      "url": "http://127.0.0.1:38391",
       "timeout": "10s"
     },
     {
       "name": "backup",
-      "url": "http://127.0.0.2:8545",
+      "url": "http://127.0.0.2:38391",
       "timeout": "10s"
     }
   ],
@@ -254,7 +339,7 @@ otherwise you will get errors on start because of JSON comments.**
     "keepTxFees": false,
     // Run unlocker in this interval
     "interval": "10m",
-    // Geth instance node rpc endpoint for unlocking blocks
+    // QuarkChain instance node rpc endpoint for unlocking blocks
     "daemon": "http://127.0.0.1:8545",
     // Rise error if can't reach geth in this amount of time
     "timeout": "10s"
@@ -267,8 +352,8 @@ otherwise you will get errors on start because of JSON comments.**
     "requirePeers": 25,
     // Run payouts in this interval
     "interval": "12h",
-    // Geth instance node rpc endpoint for payouts processing
-    "daemon": "http://127.0.0.1:8545",
+    // QuarkChain instance node rpc endpoint for payouts processing
+    "daemon": "http://127.0.0.1:38391",
     // Rise error if can't reach geth in this amount of time
     "timeout": "10s",
     // Address with pool balance
@@ -286,39 +371,5 @@ otherwise you will get errors on start because of JSON comments.**
 }
 ```
 
-If you are distributing your pool deployment to several servers or processes,
-create several configs and disable unneeded modules on each server. (Advanced users)
-
-I recommend this deployment strategy:
-
-* Mining instance - 1x (it depends, you can run one node for EU, one for US, one for Asia)
-* Unlocker and payouts instance - 1x each (strict!)
-* API instance - 1x
-
-### Notes
-
-* Unlocking and payouts are sequential, 1st tx go, 2nd waiting for 1st to confirm and so on. You can disable that in code. Carefully read `docs/PAYOUTS.md`.
-* Also, keep in mind that **unlocking and payouts will halt in case of backend or node RPC errors**. In that case check everything and restart.
-* You must restart module if you see errors with the word *suspended*.
-* Don't run payouts and unlocker modules as part of mining node. Create separate configs for both, launch independently and make sure you have a single instance of each module running.
-* If `poolFeeAddress` is not specified all pool profit will remain on coinbase address. If it specified, make sure to periodically send some dust back required for payments.
-
-### Alternative Ethereum Implementations
-
-This pool is tested to work with [Ethcore's Parity](https://github.com/ethcore/parity). Mining and block unlocking works, but I am not sure about payouts and suggest to run *official* geth node for payments.
-
-### Credits
-
-Made by sammy007. Licensed under GPLv3.
-
-#### Contributors
-
-[Alex Leverington](https://github.com/subtly)
-
-### Donations
-
-ETH/ETC: 0xb85150eb365e7df0941f0cf08235f987ba91506a
-
-![](https://cdn.pbrd.co/images/GP5tI1D.png)
-
-Highly appreciated.
+    
+    

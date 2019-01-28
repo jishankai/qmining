@@ -13,8 +13,8 @@ import (
 var hasher = ethash.New()
 
 func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, params []string) (bool, bool) {
-	nonceHex := params[0]
-	hashNoNonce := params[1]
+	nonceHex := params[1]
+	hashNoNonce := params[0]
 	mixDigest := params[2]
 	nonce, _ := strconv.ParseUint(strings.Replace(nonceHex, "0x", "", -1), 16, 64)
 	shareDiff := s.config.Proxy.Difficulty
@@ -46,7 +46,7 @@ func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, param
 	}
 
 	if hasher.Verify(block) {
-		ok, err := s.rpc().SubmitBlock(params)
+		ok, err := s.rpc().SubmitBlock(s.config.Proxy.Stratum.ShardId, params)
 		if err != nil {
 			log.Printf("Block submission failure at height %v for %v: %v", h.height, t.Header, err)
 		} else if !ok {

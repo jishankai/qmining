@@ -88,7 +88,7 @@ type UnlockResult struct {
 	maturedBlocks  []*storage.BlockData
 	orphanedBlocks []*storage.BlockData
 	orphans        int
-	uncles         int
+	//uncles         int
 	blocks         int
 }
 
@@ -140,41 +140,40 @@ func (u *BlockUnlocker) unlockCandidates(candidates []*storage.BlockData) (*Unlo
 				break
 			}
 
-			if len(block.Uncles) == 0 {
-				continue
-			}
+			//if len(block.Uncles) == 0 {
+			//	continue
+			//}
 
 			// Trying to find uncle in current block during our forward check
-			for uncleIndex, uncleHash := range block.Uncles {
-				uncle, err := u.rpc.GetUncleByBlockNumberAndIndex(height, uncleIndex)
-				if err != nil {
-					return nil, fmt.Errorf("Error while retrieving uncle of block %v from node: %v", uncleHash, err)
-				}
-				if uncle == nil {
-					return nil, fmt.Errorf("Error while retrieving uncle of block %v from node", height)
-				}
+			//for uncleIndex, uncleHash := range block.Uncles {
+			//	uncle, err := u.rpc.GetUncleByBlockNumberAndIndex(height, uncleIndex)
+			//	if err != nil {
+			//		return nil, fmt.Errorf("Error while retrieving uncle of block %v from node: %v", uncleHash, err)
+			//	}
+			//	if uncle == nil {
+			//		return nil, fmt.Errorf("Error while retrieving uncle of block %v from node", height)
+			//	}
 
 				// Found uncle
-				if matchCandidate(uncle, candidate) {
-					orphan = false
-					result.uncles++
+			//	if matchCandidate(uncle, candidate) {
+			//		orphan = false
+			//		result.uncles++
 
-					err := handleUncle(height, uncle, candidate)
-					if err != nil {
-						u.halt = true
-						u.lastFail = err
-						return nil, err
-					}
-					result.maturedBlocks = append(result.maturedBlocks, candidate)
-					log.Printf("Mature uncle %v/%v of reward %v with hash: %v", candidate.Height, candidate.UncleHeight,
-						util.FormatReward(candidate.Reward), uncle.Hash[0:10])
-					break
-				}
-			}
-			// Found block or uncle
-			if !orphan {
-				break
-			}
+			//		err := handleUncle(height, uncle, candidate)
+			//		if err != nil {
+			//			u.halt = true
+			//			u.lastFail = err
+			//			return nil, err
+			//		}
+			//		result.maturedBlocks = append(result.maturedBlocks, candidate)
+			//		log.Printf("Mature uncle %v/%v of reward %v with hash: %v", candidate.Height, candidate.UncleHeight,
+			//			util.FormatReward(candidate.Reward), uncle.Hash[0:10])
+			//		break
+			//	}
+			//}
+			//if !orphan {
+			//	break
+			//}
 		}
 		// Block is lost, we didn't find any valid block or uncle matching our data in a blockchain
 		if orphan {
@@ -197,9 +196,9 @@ func matchCandidate(block *rpc.GetBlockReply, candidate *storage.BlockData) bool
 		return strings.EqualFold(block.Nonce, candidate.Nonce)
 	}
 	// Parity's EIP: https://github.com/ethereum/EIPs/issues/95
-	if len(block.SealFields) == 2 {
-		return strings.EqualFold(candidate.Nonce, block.SealFields[1])
-	}
+	//if len(block.SealFields) == 2 {
+	//	return strings.EqualFold(candidate.Nonce, block.SealFields[1])
+	//}
 	return false
 }
 
@@ -223,9 +222,9 @@ func (u *BlockUnlocker) handleBlock(block *rpc.GetBlockReply, candidate *storage
 	}
 
 	// Add reward for including uncles
-	uncleReward := getRewardForUncle(candidate.Height)
-	rewardForUncles := big.NewInt(0).Mul(uncleReward, big.NewInt(int64(len(block.Uncles))))
-	reward.Add(reward, rewardForUncles)
+	//uncleReward := getRewardForUncle(candidate.Height)
+	//rewardForUncles := big.NewInt(0).Mul(uncleReward, big.NewInt(int64(len(block.Uncles))))
+	//reward.Add(reward, rewardForUncles)
 
 	candidate.Orphan = false
 	candidate.Hash = block.Hash
@@ -233,19 +232,19 @@ func (u *BlockUnlocker) handleBlock(block *rpc.GetBlockReply, candidate *storage
 	return nil
 }
 
-func handleUncle(height int64, uncle *rpc.GetBlockReply, candidate *storage.BlockData) error {
-	uncleHeight, err := strconv.ParseInt(strings.Replace(uncle.Number, "0x", "", -1), 16, 64)
-	if err != nil {
-		return err
-	}
-	reward := getUncleReward(uncleHeight, height)
-	candidate.Height = height
-	candidate.UncleHeight = uncleHeight
-	candidate.Orphan = false
-	candidate.Hash = uncle.Hash
-	candidate.Reward = reward
-	return nil
-}
+//func handleUncle(height int64, uncle *rpc.GetBlockReply, candidate *storage.BlockData) error {
+//	uncleHeight, err := strconv.ParseInt(strings.Replace(uncle.Number, "0x", "", -1), 16, 64)
+//	if err != nil {
+//		return err
+//	}
+//	reward := getUncleReward(uncleHeight, height)
+//	candidate.Height = height
+//	candidate.UncleHeight = uncleHeight
+//	candidate.Orphan = false
+//	candidate.Hash = uncle.Hash
+//	candidate.Reward = reward
+//	return nil
+//}
 
 func (u *BlockUnlocker) unlockPendingBlocks() {
 	if u.halt {
@@ -288,7 +287,7 @@ func (u *BlockUnlocker) unlockPendingBlocks() {
 		log.Printf("Failed to unlock blocks: %v", err)
 		return
 	}
-	log.Printf("Immature %v blocks, %v uncles, %v orphans", result.blocks, result.uncles, result.orphans)
+	//log.Printf("Immature %v blocks, %v uncles, %v orphans", result.blocks, result.uncles, result.orphans)
 
 	err = u.backend.WritePendingOrphans(result.orphanedBlocks)
 	if err != nil {
@@ -386,7 +385,7 @@ func (u *BlockUnlocker) unlockAndCreditMiners() {
 		log.Printf("Failed to unlock blocks: %v", err)
 		return
 	}
-	log.Printf("Unlocked %v blocks, %v uncles, %v orphans", result.blocks, result.uncles, result.orphans)
+	//log.Printf("Unlocked %v blocks, %v uncles, %v orphans", result.blocks, result.uncles, result.orphans)
 
 	for _, block := range result.orphanedBlocks {
 		err = u.backend.WriteOrphan(block)
@@ -508,18 +507,18 @@ func getConstReward(height int64) *big.Int {
 	return new(big.Int).Set(homesteadReward)
 }
 
-func getRewardForUncle(height int64) *big.Int {
-	reward := getConstReward(height)
-	return new(big.Int).Div(reward, new(big.Int).SetInt64(32))
-}
+//func getRewardForUncle(height int64) *big.Int {
+//	reward := getConstReward(height)
+//	return new(big.Int).Div(reward, new(big.Int).SetInt64(32))
+//}
 
-func getUncleReward(uHeight, height int64) *big.Int {
-	reward := getConstReward(height)
-	k := height - uHeight
-	reward.Mul(big.NewInt(8-k), reward)
-	reward.Div(reward, big.NewInt(8))
-	return reward
-}
+//func getUncleReward(uHeight, height int64) *big.Int {
+//	reward := getConstReward(height)
+//	k := height - uHeight
+//	reward.Mul(big.NewInt(8-k), reward)
+//	reward.Div(reward, big.NewInt(8))
+//	return reward
+//}
 
 func (u *BlockUnlocker) getExtraRewardForTx(block *rpc.GetBlockReply) (*big.Int, error) {
 	amount := new(big.Int)

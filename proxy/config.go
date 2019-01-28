@@ -52,6 +52,7 @@ type Stratum struct {
 	Listen  string `json:"listen"`
 	Timeout string `json:"timeout"`
 	MaxConn int    `json:"maxConn"`
+	ShardId string `json:"shardId"`
 }
 
 type Upstream struct {

@@ -49,12 +49,12 @@ func (b Block) NumberU64() uint64        { return b.number }
 func (s *ProxyServer) fetchBlockTemplate() {
 	rpc := s.rpc()
 	t := s.currentBlockTemplate()
-	pendingReply, height, diff, err := s.fetchPendingBlock()
+	pendingReply, height, _, err := s.fetchPendingBlock()
 	if err != nil {
 		log.Printf("Error while refreshing pending block on %s: %s", rpc.Name, err)
 		return
 	}
-	reply, err := rpc.GetWork()
+	reply, err := rpc.GetWork(s.config.Proxy.Stratum.ShardId)
 	if err != nil {
 		log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
 		return
@@ -65,20 +65,24 @@ func (s *ProxyServer) fetchBlockTemplate() {
 	}
 
 	pendingReply.Difficulty = util.ToHex(s.config.Proxy.Difficulty)
-
+	diff_template := util.DiffHexToDiff(reply[2])
+	height_temp := util.HexToInt64(reply[1])
+	//seed := util.seedHash(height)
+	// Seed equals to hex string Height
 	newTemplate := BlockTemplate{
 		Header:               reply[0],
 		Seed:                 reply[1],
-		Target:               reply[2],
-		Height:               height,
-		Difficulty:           big.NewInt(diff),
+		Target:               util.GetTargetHexFromDiff(diff_template),
+		Height:               height_temp,
+		Difficulty:           diff_template,
+		//Difficulty:           big.NewInt(diff),
 		GetPendingBlockCache: pendingReply,
 		headers:              make(map[string]heightDiffPair),
 	}
 	// Copy job backlog and add current one
 	newTemplate.headers[reply[0]] = heightDiffPair{
-		diff:   util.TargetHexToDiff(reply[2]),
-		height: height,
+		diff:   diff_template,
+		height: util.HexToInt64(reply[1]),
 	}
 	if t != nil {
 		for k, v := range t.headers {
@@ -98,7 +102,7 @@ func (s *ProxyServer) fetchBlockTemplate() {
 
 func (s *ProxyServer) fetchPendingBlock() (*rpc.GetBlockReplyPart, uint64, int64, error) {
 	rpc := s.rpc()
-	reply, err := rpc.GetPendingBlock()
+	reply, err := rpc.GetPendingBlock(s.config.Proxy.Stratum.ShardId)
 	if err != nil {
 		log.Printf("Error while refreshing pending block on %s: %s", rpc.Name, err)
 		return nil, 0, 0, err

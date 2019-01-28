@@ -28,7 +28,7 @@ type RPCClient struct {
 }
 
 type GetBlockReply struct {
-	Number       string   `json:"number"`
+	Number       string   `json:"height"`
 	Hash         string   `json:"hash"`
 	Nonce        string   `json:"nonce"`
 	Miner        string   `json:"miner"`
@@ -36,13 +36,13 @@ type GetBlockReply struct {
 	GasLimit     string   `json:"gasLimit"`
 	GasUsed      string   `json:"gasUsed"`
 	Transactions []Tx     `json:"transactions"`
-	Uncles       []string `json:"uncles"`
+	//Uncles       []string `json:"uncles"`
 	// https://github.com/ethereum/EIPs/issues/95
-	SealFields []string `json:"sealFields"`
+	// SealFields []string `json:"sealFields"`
 }
 
 type GetBlockReplyPart struct {
-	Number     string `json:"number"`
+	Number     string `json:"height"`
 	Difficulty string `json:"difficulty"`
 }
 
@@ -88,8 +88,8 @@ func NewRPCClient(name, url, timeout string) *RPCClient {
 	return rpcClient
 }
 
-func (r *RPCClient) GetWork() ([]string, error) {
-	rpcResp, err := r.doPost(r.Url, "eth_getWork", []string{})
+func (r *RPCClient) GetWork(shardId string) ([]string, error) {
+	rpcResp, err := r.doPost(r.Url, "getWork", []string{shardId})
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +98,8 @@ func (r *RPCClient) GetWork() ([]string, error) {
 	return reply, err
 }
 
-func (r *RPCClient) GetPendingBlock() (*GetBlockReplyPart, error) {
-	rpcResp, err := r.doPost(r.Url, "eth_getBlockByNumber", []interface{}{"pending", false})
+func (r *RPCClient) GetPendingBlock(shardId string) (*GetBlockReplyPart, error) {
+	rpcResp, err := r.doPost(r.Url, "getMinorBlockByHeight", []interface{}{shardId, nil, false})
 	if err != nil {
 		return nil, err
 	}
@@ -121,10 +121,10 @@ func (r *RPCClient) GetBlockByHash(hash string) (*GetBlockReply, error) {
 	return r.getBlockBy("eth_getBlockByHash", params)
 }
 
-func (r *RPCClient) GetUncleByBlockNumberAndIndex(height int64, index int) (*GetBlockReply, error) {
-	params := []interface{}{fmt.Sprintf("0x%x", height), fmt.Sprintf("0x%x", index)}
-	return r.getBlockBy("eth_getUncleByBlockNumberAndIndex", params)
-}
+//func (r *RPCClient) GetUncleByBlockNumberAndIndex(height int64, index int) (*GetBlockReply, error) {
+//	params := []interface{}{fmt.Sprintf("0x%x", height), fmt.Sprintf("0x%x", index)}
+//	return r.getBlockBy("eth_getUncleByBlockNumberAndIndex", params)
+//}
 
 func (r *RPCClient) getBlockBy(method string, params []interface{}) (*GetBlockReply, error) {
 	rpcResp, err := r.doPost(r.Url, method, params)
@@ -140,7 +140,7 @@ func (r *RPCClient) getBlockBy(method string, params []interface{}) (*GetBlockRe
 }
 
 func (r *RPCClient) GetTxReceipt(hash string) (*TxReceipt, error) {
-	rpcResp, err := r.doPost(r.Url, "eth_getTransactionReceipt", []string{hash})
+	rpcResp, err := r.doPost(r.Url, "getTransactionReceipt", []string{hash})
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +152,11 @@ func (r *RPCClient) GetTxReceipt(hash string) (*TxReceipt, error) {
 	return nil, nil
 }
 
-func (r *RPCClient) SubmitBlock(params []string) (bool, error) {
-	rpcResp, err := r.doPost(r.Url, "eth_submitWork", params)
+func (r *RPCClient) SubmitBlock(shardId string, params []string) (bool, error) {
+	 
+	var submitParams = []string{shardId, params[0], params[1], params[2]}
+
+	rpcResp, err := r.doPost(r.Url, "submitWork", submitParams)
 	if err != nil {
 		return false, err
 	}
@@ -163,16 +166,16 @@ func (r *RPCClient) SubmitBlock(params []string) (bool, error) {
 }
 
 func (r *RPCClient) GetBalance(address string) (*big.Int, error) {
-	rpcResp, err := r.doPost(r.Url, "eth_getBalance", []string{address, "latest"})
+	rpcResp, err := r.doPost(r.Url, "getBalance", []string{address})
 	if err != nil {
 		return nil, err
 	}
-	var reply string
+	var reply []string
 	err = json.Unmarshal(*rpcResp.Result, &reply)
 	if err != nil {
 		return nil, err
 	}
-	return util.String2Big(reply), err
+	return util.String2Big(reply[2]), err
 }
 
 func (r *RPCClient) Sign(from string, s string) (string, error) {
@@ -264,7 +267,7 @@ func (r *RPCClient) doPost(url string, method string, params interface{}) (*JSON
 }
 
 func (r *RPCClient) Check() bool {
-	_, err := r.GetWork()
+	_, err := r.GetWork("0x0")
 	if err != nil {
 		return false
 	}

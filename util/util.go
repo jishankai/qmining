@@ -5,9 +5,16 @@ import (
 	"regexp"
 	"strconv"
 	"time"
-
+	"strings"
+	"hash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+)
+
+
+const (
+	epochLength        = 30000   // Blocks per epoch
 )
 
 var Ether = math.BigPow(10, 18)
@@ -38,13 +45,32 @@ func GetTargetHex(diff int64) string {
 	return string(common.ToHex(diff1.Bytes()))
 }
 
+
+func GetTargetHexFromDiff(diff *big.Int) string {
+	diff1 := new(big.Int).Div(pow256, diff)
+	return string(common.ToHex(diff1.Bytes()))
+}
+
+
 func TargetHexToDiff(targetHex string) *big.Int {
 	targetBytes := common.FromHex(targetHex)
 	return new(big.Int).Div(pow256, new(big.Int).SetBytes(targetBytes))
 }
 
+// QuarkChain new function to adjust RPC
+func DiffHexToDiff(diffHex string) *big.Int {
+	diffBytes := common.FromHex(diffHex)
+	return new(big.Int).SetBytes(diffBytes)
+}
+
+
 func ToHex(n int64) string {
 	return "0x0" + strconv.FormatInt(n, 16)
+}
+
+func HexToInt64(height string) uint64 {
+	value, _  := strconv.ParseUint(strings.Replace(height, "0x", "", -1), 16, 64)
+	return value
 }
 
 func FormatReward(reward *big.Int) string {
@@ -78,4 +104,45 @@ func String2Big(num string) *big.Int {
 	n := new(big.Int)
 	n.SetString(num, 0)
 	return n
+}
+
+
+
+type hasher func(dest []byte, data []byte)
+
+// makeHasher creates a repetitive hasher, allowing the same hash data structures to
+// be reused between hash runs instead of requiring new ones to be created. The returned
+// function is not thread safe!
+func makeHasher(h hash.Hash) hasher {
+	// sha3.state supports Read to get the sum, use it to avoid the overhead of Sum.
+	// Read alters the state but we reset the hash before every operation.
+	type readerHash interface {
+		hash.Hash
+		Read([]byte) (int, error)
+	}
+	rh, ok := h.(readerHash)
+	if !ok {
+		panic("can't find Read method on hash")
+	}
+	outputLen := rh.Size()
+	return func(dest []byte, data []byte) {
+		rh.Reset()
+		rh.Write(data)
+		rh.Read(dest[:outputLen])
+	}
+}
+
+
+// seedHash is the seed to use for generating a verification cache and the mining
+// dataset.
+func seedHash(block uint64) []byte {
+	seed := make([]byte, 32)
+	if block < epochLength {
+		return seed
+	}
+	keccak256 := makeHasher(sha3.NewKeccak256())
+	for i := 0; i < int(block/epochLength); i++ {
+		keccak256(seed, seed)
+	}
+	return seed
 }

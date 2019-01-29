@@ -340,7 +340,7 @@ otherwise you will get errors on start because of JSON comments.**
     // Run unlocker in this interval
     "interval": "10m",
     // QuarkChain instance node rpc endpoint for unlocking blocks
-    "daemon": "http://127.0.0.1:8545",
+    "daemon": "http://127.0.0.1:38391",
     // Rise error if can't reach geth in this amount of time
     "timeout": "10s"
   },

@@ -9,7 +9,8 @@ import (
 	"hash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	//"github.com/ethereum/go-ethereum/crypto/sha3"
+	"golang.org/x/crypto/sha3"
 )
 
 
@@ -140,7 +141,7 @@ func seedHash(block uint64) []byte {
 	if block < epochLength {
 		return seed
 	}
-	keccak256 := makeHasher(sha3.NewKeccak256())
+	keccak256 := makeHasher(sha3.NewLegacyKeccak256())
 	for i := 0; i < int(block/epochLength); i++ {
 		keccak256(seed, seed)
 	}

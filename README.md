@@ -9,6 +9,7 @@
 * Support failover pool
 * Separate stats for workers: can highlight timed-out workers so miners can perform maintenance of rigs
 * JSON-API for stats
+* Support Ethminer mining
 
 #### Proxies
 

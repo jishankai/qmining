@@ -154,7 +154,7 @@ func (r *RPCClient) GetTxReceipt(hash string) (*TxReceipt, error) {
 
 func (r *RPCClient) SubmitBlock(shardId string, params []string) (bool, error) {
 	 
-	var submitParams = []string{shardId, params[0], params[1], params[2]}
+	var submitParams = []string{shardId, params[1], params[0], params[2]}
 
 	rpcResp, err := r.doPost(r.Url, "submitWork", submitParams)
 	if err != nil {

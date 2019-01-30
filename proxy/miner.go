@@ -13,8 +13,8 @@ import (
 var hasher = ethash.New()
 
 func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, params []string) (bool, bool) {
-	nonceHex := params[1]
-	hashNoNonce := params[0]
+	nonceHex := params[0]
+	hashNoNonce := params[1]
 	mixDigest := params[2]
 	nonce, _ := strconv.ParseUint(strings.Replace(nonceHex, "0x", "", -1), 16, 64)
 	shareDiff := s.config.Proxy.Difficulty

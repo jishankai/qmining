@@ -6,18 +6,41 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/hackmod/ethereum-ethash"
+
+	"github.com/sammy007/open-ethereum-pool/util"
 )
 
-var hasher = ethash.New()
+var ethash_hasher = ethash.New()
 
-func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, params []string) (bool, bool) {
+func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, params []string, stratum bool) (bool, bool) {
 	nonceHex := params[0]
 	hashNoNonce := params[1]
 	mixDigest := params[2]
 	nonce, _ := strconv.ParseUint(strings.Replace(nonceHex, "0x", "", -1), 16, 64)
 	shareDiff := s.config.Proxy.Difficulty
+
+	if stratum {
+		hashNoNonceTmp := common.HexToHash(params[2])
+
+		// Block "difficulty" is BigInt
+		// NiceHash "difficulty" is float64 ...
+		// diffFloat => target; then: diffInt = 2^256 / target
+
+		_, mixDigestTmp, hashTmp := ethash_hasher.Compute(t.Height, hashNoNonceTmp, nonce)
+		shareDiffCalc := util.TargetHexToDiff(hashTmp.Hex()).Int64()
+		shareDiffFloat := DiffIntToFloat(shareDiffCalc)
+		if shareDiffFloat < 0.0001 {
+			log.Printf("share difficulty too low, %f < %d, from %v@%v", shareDiffFloat, t.Difficulty, login, ip)
+			return false, false
+		}
+
+		params[1] = hashNoNonceTmp.Hex()
+		params[2] = mixDigestTmp.Hex()
+		hashNoNonce = params[1]
+		mixDigest = params[2]
+	}
 
 	h, ok := t.headers[hashNoNonce]
 	if !ok {
@@ -41,11 +64,11 @@ func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, param
 		mixDigest:   common.HexToHash(mixDigest),
 	}
 
-	if !hasher.Verify(share) {
+	if !ethash_hasher.Verify(share) {
 		return false, false
 	}
 
-	if hasher.Verify(block) {
+	if ethash_hasher.Verify(block) {
 		ok, err := s.rpc().SubmitBlock(s.config.Proxy.Stratum.ShardId, params)
 		if err != nil {
 			log.Printf("Block submission failure at height %v for %v: %v", h.height, t.Header, err)
@@ -75,4 +98,9 @@ func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, param
 		}
 	}
 	return false, true
+}
+
+func DiffIntToFloat(diffInt int64) (diffFloat float64) {
+	diffFloat = float64(diffInt*0xffff) / float64(1<<48) // 48 = 256 - 26*8
+	return
 }

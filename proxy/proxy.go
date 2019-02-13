@@ -29,11 +29,26 @@ type ProxyServer struct {
 	policy             *policy.PolicyServer
 	hashrateExpiration time.Duration
 	failsCount         int64
+	proxyMu         sync.RWMutex
 
 	// Stratum
 	sessionsMu sync.RWMutex
 	sessions   map[*Session]struct{}
 	timeout    time.Duration
+	// Extranonce
+	Extranonces map[string]bool
+}
+
+type jobDetails struct {
+	JobID      string
+	SeedHash   string
+	HeaderHash string
+	Height     string
+}
+
+type staleJob struct {
+	SeedHash   string
+	HeaderHash string
 }
 
 type Session struct {
@@ -44,6 +59,14 @@ type Session struct {
 	sync.Mutex
 	conn  *net.TCPConn
 	login string
+
+	stratum        int
+	subscriptionID string
+	Extranonce     string
+	ExtranonceSub  bool
+	JobDetails     jobDetails
+	staleJobs      map[string]staleJob
+	staleJobIDs    []string
 }
 
 func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
@@ -64,6 +87,7 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 
 	if cfg.Proxy.Stratum.Enabled {
 		proxy.sessions = make(map[*Session]struct{})
+		proxy.Extranonces = make(map[string]bool)
 		go proxy.ListenTCP()
 	}
 
@@ -149,7 +173,7 @@ func (s *ProxyServer) checkUpstreams() {
 	backup := false
 
 	for i, v := range s.upstreams {
-		if v.Check() && !backup {
+		if v.Check(s.config.Proxy.Stratum.ShardId) && !backup {
 			candidate = int32(i)
 			backup = true
 		}

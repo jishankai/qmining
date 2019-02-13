@@ -9,7 +9,9 @@
 * Support failover pool
 * Separate stats for workers: can highlight timed-out workers so miners can perform maintenance of rigs
 * JSON-API for stats
-* Support Ethminer mining
+* Support [Ethminer mining](https://github.com/ethereum-mining/ethminer)
+* Support [Claymore mining](https://github.com/nanopool/Claymore-Dual-Miner/releases)
+* Support NiceHash Stratum mode
 
 #### Proxies
 
@@ -163,18 +165,43 @@ The payout functions and the web UI do not work currently. You can achieve the m
     python3 redis_check_mining_state.py --port 6379
     
 ### Ethash and Qkchash pool port configuration
-Pool IP is 54.202.245.214
+Pool IP is 34.220.137.126
 
 |Chains |Hash Algorithm |Stratum port| Proxy port | API port(web server) | redis port
 | ---      | ---       | --- | --- | --- | --- |
 | Root Chain     | Not supported | Not supported | Not supported | Not supported | Not supported | 
-| Shard 0       | Ethash       | 8008 | 8888 | 8080 | 6380 | 
-| Shard 1       | Ethash       | 8018 | 8881 | 8081 | 6381 | 
-| Shard 2       | Ethash       | 8028 | 8882 | 8082 | 6382 | 
-| Shard 3       | Ethash       | 8038 | 8883 | 8083 | 6383 | 
-| Shard 6       | Qkchash      | 8068 | 8886 | 8086 | 6386 | 
-| Shard 7       | Qkchash      | 8078 | 8887 | 8087 | 6379 | 
+| Shard 0       | Ethash       | 8008 | 8888 | 8080 | 6379 | 
+| Shard 1       | Ethash       | 8018 | 8881 | 8081 | 6379 | 
+| Shard 2       | Ethash       | 8028 | 8882 | 8082 | 6379 | 
+| Shard 3       | Ethash       | 8038 | 8883 | 8083 | 6379 | 
+| Shard 6       | Qkchash      | 8068 | 8886 | 8086 | 6378 | 
+| Shard 7       | Qkchash      | 8078 | 8887 | 8087 | 6378 | 
 
+
+|Chain |Shard |Hash Algo |Parameter for Ethminer shard ID|
+| ---      | ---     |---  | --- |
+| 0  | 0      | Ethash               | 1 |
+| 1  |  0      | Ethash        | 10001 |
+| 2  |  0       | Ethash              | 20001 |
+| 3  |  0       | Ethash              | 30001 |
+
+### Claymore 
+It supports Claymore mining, which is dual Ethereum+Decred mining software. Download the [closed source software]((https://github.com/nanopool/Claymore-Dual-Miner/releases)) and connect the pool using the following command. 
+
+    $ ./ethdcrminer64 -epool 34.220.137.126:8018 $COINBASE_ADDRESS -mode 1 -allcoins 1
+
+### NiceHash
+
+This Ethash pool supports both NiceHash and ETHPROXY. 
+
+    Autodetection process passes all known stratum modes.
+    - 1st pass EthStratumClient::ETHEREUMSTRATUM2 (3)  Not supported
+    - 2nd pass EthStratumClient::ETHEREUMSTRATUM  (2)  Supported (NiceHash)
+    - 3rd pass EthStratumClient::ETHPROXY         (1)  Supported
+    - 4th pass EthStratumClient::STRATUM          (0)  Not supported
+
+
+![](https://i.imgur.com/OwKfnBD.png)
 
 
 ### Configuration
@@ -217,7 +244,7 @@ otherwise you will get errors on start because of JSON comments.**
       "timeout": "120s",
       "maxConn": 8192,
       // Fill in the shard Id here
-      "shardId": "0x0",
+      "shardId": "0x1",
     },
 
     // Try to get new job from geth in this interval

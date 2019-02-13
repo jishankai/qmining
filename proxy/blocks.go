@@ -70,6 +70,10 @@ func (s *ProxyServer) fetchBlockTemplate() {
 		return
 	}
 	reply, err := rpc.GetWork(s.config.Proxy.Stratum.ShardId)
+	if reply == nil {
+		log.Printf("Erreo getWork return nil value")
+		return
+	}
 	if err != nil {
 		log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
 		return
@@ -116,8 +120,14 @@ func (s *ProxyServer) fetchBlockTemplate() {
 }
 
 func (s *ProxyServer) fetchPendingBlock() (*rpc.GetBlockReplyPart, uint64, int64, error) {
+	s.proxyMu.Lock()
+	defer s.proxyMu.Unlock()
 	rpc := s.rpc()
 	reply, err := rpc.GetPendingBlock(s.config.Proxy.Stratum.ShardId)
+	if reply == nil {
+		log.Printf("Error return the empty block")
+		return nil, 0, 0, err
+	}
 	if err != nil {
 		log.Printf("Error while refreshing pending block on %s: %s", rpc.Name, err)
 		return nil, 0, 0, err

@@ -93,6 +93,12 @@ Check the go version
 
     . . .
     
+    # Warning: since Redis is pretty fast an outside user can try up to
+    # 150k passwords per second against a good box. This means that you should
+    # use a very strong password otherwise it will be very easy to break.
+    #
+    requirepass tothem00n
+    
 ### Create a Redis systemed Unit File
 
     $ sudo vim /etc/systemd/system/redis.service

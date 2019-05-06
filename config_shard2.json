@@ -5,13 +5,13 @@
 
 	"proxy": {
 		"enabled": true,
-		"listen": "0.0.0.0:8888",
+		"listen": "0.0.0.0:8882",
 		"limitHeadersSize": 1024,
 		"limitBodySize": 256,
 		"behindReverseProxy": false,
-		"blockRefreshInterval": "120ms",
+		"blockRefreshInterval": "1200ms",
 		"stateUpdateInterval": "3s",
-		"difficulty": 1000000000,
+		"difficulty": 10000000000,
 		"hashrateExpiration": "3h",
 
 		"healthCheck": true,
@@ -19,10 +19,10 @@
 
 		"stratum": {
 			"enabled": true,
-			"listen": "0.0.0.0:8008",
+			"listen": "0.0.0.0:8028",
 			"timeout": "120s",
 			"maxConn": 8192,
-			"shardId": "0x0"
+			"shardId": "0x20001"
 		},
 
 		"policy": {
@@ -51,7 +51,7 @@
 		"enabled": true,
 		"purgeOnly": false,
 		"purgeInterval": "10m",
-		"listen": "0.0.0.0:8080",
+		"listen": "0.0.0.0:8082",
 		"statsCollectInterval": "5s",
 		"hashrateWindow": "30m",
 		"hashrateLargeWindow": "3h",
@@ -78,7 +78,7 @@
 		"endpoint": "127.0.0.1:6379",
 		"poolSize": 10,
 		"database": 0,
-		"password": ""
+		"password": "tothem00n"
 	},
 
 	"unlocker": {

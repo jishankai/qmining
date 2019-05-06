@@ -1,0 +1,20 @@
+30 GPU mining machines connection information 
+Coinbase address： 0x7DeB90eF2097D8A9e423516e199b9D95EB2b4D97
+
+
+6 GPU mining machine Ethash  Pool IP： pool0.quarkchain.io Port: 8000
+6 GPU mining machine Ethash  Pool IP 18.138.144.212 Port: 8000
+6 GPU mining machine Ethash  Pool IP 52.197.219.127 Port: 8000
+
+
+2 GPU mining machine Ethash  Pool IP： pool1.quarkchain.io Port: 8008
+2 GPU mining machine Ethash  Pool IP： pool1.quarkchain.io Port: 8018
+2 GPU mining machine Ethash  Pool IP： pool1.quarkchain.io Port: 8028
+2 GPU mining machine Ethash  Pool IP： pool1.quarkchain.io Port: 8038
+2 GPU mining machine Ethash  Pool IP： pool1.quarkchain.io Port: 8048
+2 GPU mining machine Ethash  Pool IP： pool1.quarkchain.io Port: 8058
+
+
+30 CPU mining machines connection information 
+15 CPU mining machine Qkchash  Pool IP： pool1.quarkchain.io Port: 8068
+15 CPU mining machine Qkchash  Pool IP： pool1.quarkchain.io Port: 8078

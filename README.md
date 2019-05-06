@@ -171,15 +171,39 @@ The payout functions and the web UI do not work currently. You can achieve the m
     python3 redis_check_mining_state.py --port 6379
     
 ### Ethash and Qkchash pool port configuration
-Pool IP is 34.220.137.126
+
+Root Guardian Pool IP is:
+  * pool0.quarkchain.io [52.11.34.67] (Oregen)
+  * 18.138.144.212 (Singapore)
+  * 52.197.219.127 (Tokyo)
+  
+Root chain coinbase address:
+  * 0x7DeB90eF2097D8A9e423516e199b9D95EB2b4D97 (POSW)
+  * 0xf923ac88fc61837662bace7e94720c7a071997e6
+  * 0x2b7acc42b0dc2a1562601e2ed9957eadff7a134
+
+Guardian Signature Server IP:
+  * 34.74.159.114
+  * 34.83.17.20
+  * 35.187.152.61
+
+Shard chaid Pool IP is:
+  * pool1.quarkchain.io [54.203.168.137] (Oregen)
+
+Mainnet Pool AMI:
+
+Mainnet_pool_standard_AMI_05_06 (ami-0d838d064757dd87b) (Oregen, Singapore, and Tokyo)
+
 
 |Chains |Hash Algorithm |Stratum port| Proxy port | API port(web server) | redis port
-| ---      | ---       | --- | --- | --- | --- |
-| Root Chain     | Not supported | Not supported | Not supported | Not supported | Not supported | 
+| ---           | ---          | ---  | ---  | ---  | --- |
+| Root Chain    | Ethash       | 8000 | 8888 | 8079 | 6379 | 
 | Shard 0       | Ethash       | 8008 | 8888 | 8080 | 6379 | 
 | Shard 1       | Ethash       | 8018 | 8881 | 8081 | 6379 | 
 | Shard 2       | Ethash       | 8028 | 8882 | 8082 | 6379 | 
 | Shard 3       | Ethash       | 8038 | 8883 | 8083 | 6379 | 
+| Shard 4       | Ethash       | 8048 | 8884 | 8084 | 6379 | 
+| Shard 5       | Ethash       | 8058 | 8885 | 8085 | 6379 | 
 | Shard 6       | Qkchash      | 8068 | 8886 | 8086 | 6378 | 
 | Shard 7       | Qkchash      | 8078 | 8887 | 8087 | 6378 | 
 
@@ -190,11 +214,15 @@ Pool IP is 34.220.137.126
 | 1  |  0      | Ethash        | 10001 |
 | 2  |  0       | Ethash              | 20001 |
 | 3  |  0       | Ethash              | 30001 |
+| 4  |  0       | Ethash              | 40001 |
+| 5  |  0       | Ethash              | 50001 |
+| 6 |  0       | Qkchash              | 60001 |
+| 7 |  0       | Qkchash              | 70001 |
 
 ### Claymore 
 It supports Claymore mining, which is dual Ethereum+Decred mining software. Download the [closed source software]((https://github.com/nanopool/Claymore-Dual-Miner/releases)) and connect the pool using the following command. 
 
-    $ ./ethdcrminer64 -epool 34.220.137.126:8018 $COINBASE_ADDRESS -mode 1 -allcoins 1
+    $ ./ethdcrminer64 -epool pool1.quarkchain.io:8008 $COINBASE_ADDRESS -mode 1 -allcoins 1
 
 ### NiceHash
 

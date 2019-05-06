@@ -5,7 +5,7 @@
 
 	"proxy": {
 		"enabled": true,
-		"listen": "0.0.0.0:8881",
+		"listen": "0.0.0.0:8885",
 		"limitHeadersSize": 1024,
 		"limitBodySize": 256,
 		"behindReverseProxy": false,
@@ -19,10 +19,10 @@
 
 		"stratum": {
 			"enabled": true,
-			"listen": "0.0.0.0:8018",
+			"listen": "0.0.0.0:8058",
 			"timeout": "120s",
 			"maxConn": 8192,
-			"shardId": "0x10001"
+			"shardId": "0x50001"
 		},
 
 		"policy": {
@@ -51,7 +51,7 @@
 		"enabled": true,
 		"purgeOnly": false,
 		"purgeInterval": "10m",
-		"listen": "0.0.0.0:8081",
+		"listen": "0.0.0.0:8085",
 		"statsCollectInterval": "5s",
 		"hashrateWindow": "30m",
 		"hashrateLargeWindow": "3h",

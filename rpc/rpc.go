@@ -266,8 +266,8 @@ func (r *RPCClient) doPost(url string, method string, params interface{}) (*JSON
 	return rpcResp, err
 }
 
-func (r *RPCClient) Check(shardId string) bool {
-	_, err := r.GetWork(shardId)
+func (r *RPCClient) Check() bool {
+	_, err := r.GetWork("0x0")
 	if err != nil {
 		return false
 	}

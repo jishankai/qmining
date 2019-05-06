@@ -94,8 +94,3 @@ func String2Big(num string) *big.Int {
 }
 
 
-func DiffFloatToInt(diffFloat float64) (diffInt int64) {
-	diffInt = int64(diffFloat * float64(1<<48) / float64(0xffff)) // 48 = 256 - 26*8
-	return
-}
-

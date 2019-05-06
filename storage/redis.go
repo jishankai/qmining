@@ -212,7 +212,6 @@ func (r *RedisClient) WriteBlock(login, id string, params []string, diff, roundD
 		tx.HIncrBy(r.formatKey("miners", login), "blocksFound", 1)
 		tx.Rename(r.formatKey("shares", "roundCurrent"), r.formatRound(int64(height), params[0]))
 		tx.HGetAllMap(r.formatRound(int64(height), params[0]))
-		tx.HIncrBy("minerBoards", r.formatKey("miners", login), 1)
 		return nil
 	})
 	if err != nil {

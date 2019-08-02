@@ -173,22 +173,28 @@ The payout functions and the web UI do not work currently. You can achieve the m
 ### Ethash and Qkchash pool port configuration
 
 Root Guardian Pool IP is:
-  * pool0.quarkchain.io [52.11.34.67] (Oregen)
+  * pool0.quarkchain.io [52.11.34.67] (Oregon)
   * 18.138.144.212 (Singapore)
   * 52.197.219.127 (Tokyo)
   
+  
+Root Guardian Full Cluster Node IP is:
+  * 34.208.170.17 (Oregon)
+  * 18.139.100.179 (Singapore)
+  * 3.113.209.64 (Tokyo)
+  
 Root chain coinbase address:
-  * 0x7DeB90eF2097D8A9e423516e199b9D95EB2b4D97 (POSW)
-  * 0xf923ac88fc61837662bace7e94720c7a071997e6
-  * 0x2b7acc42b0dc2a1562601e2ed9957eadff7a134
+  * 0x7DeB90eF2097D8A9e423516e199b9D95EB2b4D97 (POSW) (Oregon)
+  * 0xf923ac88fc61837662bace7e94720c7a071997e6 (Singapore)
+  * 0x2b7acc42b0dc2a1562601e2ed9957eadff7a1347 (Tokyo)
 
 Guardian Signature Server IP:
-  * 34.74.159.114
-  * 34.83.17.20
-  * 35.187.152.61
+  * 34.74.159.114 (Oregon)
+  * 34.83.17.20 (Singapore)
+  * 35.187.152.61 (Tokyo)
 
 Shard chaid Pool IP is:
-  * pool1.quarkchain.io [54.203.168.137] (Oregen)
+  * pool1.quarkchain.io [54.203.168.137] (Oregon)
 
 Mainnet Pool AMI:
 

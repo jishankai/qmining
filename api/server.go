@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"strconv"
 
 	"github.com/gorilla/mux"
 
@@ -172,6 +173,7 @@ func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
 		reply["maturedTotal"] = stats["maturedTotal"]
 		reply["immatureTotal"] = stats["immatureTotal"]
 		reply["candidatesTotal"] = stats["candidatesTotal"]
+		reply["hashrateList"] = stats["hashrateList"]
 	}
 
 	err = json.NewEncoder(w).Encode(reply)
@@ -202,22 +204,44 @@ func (s *ApiServer) MinersIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
+
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 
+	page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
+
+	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
+
+	if err_int != nil {
+		log.Println("Error serializing API page: ", err_int)
+	}
+
+	pageSize := limit
 	reply := make(map[string]interface{})
+	reply["pageSize"] = pageSize
+	reply["page"] = page
 	stats := s.getStats()
 	if stats != nil {
-		reply["matured"] = stats["matured"]
-		reply["maturedTotal"] = stats["maturedTotal"]
-		reply["immature"] = stats["immature"]
-		reply["immatureTotal"] = stats["immatureTotal"]
-		reply["candidates"] = stats["candidates"]
-		reply["candidatesTotal"] = stats["candidatesTotal"]
-		reply["luck"] = stats["luck"]
+		lowerBound := pageSize * (page - 1)
+		upperBound := pageSize * page
+		totalInt := int64(len(stats["matured"].([]*storage.BlockData)[:]))
+		if upperBound > totalInt {
+				upperBound = totalInt
+		}
+		reply["data"] = stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]
+		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound])) 
+		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize 
+		reply["count"] = stats["maturedTotal"]
+		//reply["immature"] = stats["immature"]
+		//reply["immatureTotal"] = stats["immatureTotal"]
+		//reply["candidates"] = stats["candidates"].([]*storage.BlockData)[:50]
+		//reply["candidatesTotal"] = stats["candidatesTotal"]
+		//reply["luck"] = stats["luck"]
 	}
+	reply["code"] = 0
+	reply["msg"] = ""
 
 	err := json.NewEncoder(w).Encode(reply)
 	if err != nil {

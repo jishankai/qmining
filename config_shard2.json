@@ -11,8 +11,8 @@
 		"behindReverseProxy": false,
 		"blockRefreshInterval": "1200ms",
 		"stateUpdateInterval": "3s",
-		"difficulty": 10000000000,
-		"hashrateExpiration": "3h",
+		"difficulty": 6000000000,
+		"hashrateExpiration": "24h",
 
 		"healthCheck": true,
 		"maxFails": 100,
@@ -53,11 +53,11 @@
 		"purgeInterval": "10m",
 		"listen": "0.0.0.0:8082",
 		"statsCollectInterval": "5s",
-		"hashrateWindow": "30m",
-		"hashrateLargeWindow": "3h",
+		"hashrateWindow": "24h",
+		"hashrateLargeWindow": "24h",
 		"luckWindow": [64, 128, 256],
 		"payments": 30,
-		"blocks": 50
+		"blocks": 500
 	},
 
 	"upstreamCheckInterval": "5s",
@@ -75,23 +75,24 @@
 	],
 
 	"redis": {
-		"endpoint": "127.0.0.1:6379",
+		"endpoint": "127.0.0.1:6377",
 		"poolSize": 10,
 		"database": 0,
 		"password": "tothem00n"
 	},
 
 	"unlocker": {
-		"enabled": false,
+		"enabled": true,
 		"poolFee": 1.0,
 		"poolFeeAddress": "",
 		"donate": true,
-		"depth": 120,
-		"immatureDepth": 20,
+		"depth": 17,
+		"immatureDepth": 9,
 		"keepTxFees": false,
 		"interval": "10m",
 		"daemon": "http://127.0.0.1:38391",
-		"timeout": "10s"
+		"timeout": "10s",
+		"shardId": "0x20001"
 	},
 
 	"payouts": {

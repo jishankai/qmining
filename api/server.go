@@ -5,11 +5,11 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"strconv"
 
 	"github.com/gorilla/mux"
 
@@ -228,11 +228,11 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 		upperBound := pageSize * page
 		totalInt := int64(len(stats["matured"].([]*storage.BlockData)[:]))
 		if upperBound > totalInt {
-				upperBound = totalInt
+			upperBound = totalInt
 		}
 		reply["data"] = stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]
-		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound])) 
-		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize 
+		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]))
+		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize
 		reply["count"] = stats["maturedTotal"]
 		//reply["immature"] = stats["immature"]
 		//reply["immatureTotal"] = stats["immatureTotal"]
@@ -257,6 +257,9 @@ func (s *ApiServer) PaymentsIndex(w http.ResponseWriter, r *http.Request) {
 
 	reply := make(map[string]interface{})
 	stats := s.getStats()
+
+	stats["payments"] = []string{}
+
 	if stats != nil {
 		reply["payments"] = stats["payments"]
 		reply["paymentsTotal"] = stats["paymentsTotal"]
@@ -284,7 +287,15 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	if !ok || reply.updatedAt < now-cacheIntv {
 		exist, err := s.backend.IsMinerExists(login)
 		if !exist {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusOK)
+			okb := make(map[string]interface{})
+			okb["code"] = 404
+			err := json.NewEncoder(w).Encode(okb)
+			if err != nil {
+				log.Println("Error serializing API response: ", err)
+			}
+			log.Println("Url Param 'login' is missing")
+			//w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		if err != nil {

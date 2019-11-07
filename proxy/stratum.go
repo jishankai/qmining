@@ -186,28 +186,31 @@ func (s *ProxyServer) removeSession(cs *Session) {
 }
 
 func (s *ProxyServer) broadcastNewJobs() {
-	t := s.currentBlockTemplate()
-	if t == nil || len(t.Header) == 0 || s.isSick() {
-		return
-	}
-	reply := []string{t.Header, t.Seed, s.diff}
-
 	s.sessionsMu.RLock()
 	defer s.sessionsMu.RUnlock()
 
-	count := len(s.sessions)
-	log.Printf("Broadcasting new job to %v stratum miners", count)
-
+	count := 0
 	start := time.Now()
 	bcast := make(chan int, 1024)
 	n := 0
+
 
 	for m, _ := range s.sessions {
 		n++
 		bcast <- n
 
 		go func(cs *Session) {
-			err := cs.pushNewJob(&reply)
+			log.Printf("check status: %v, %v, %v", cs.login, s.updateMap[cs.login], n)
+			if s.updateMap[cs.login] == false {
+				return
+			}
+			count++
+			block := s.currentBlockTemplateWithId(cs.login)
+			if (block == nil || len(block.Header) == 0 || s.isSick()) {
+				return
+			}
+			replyBlock := []string{block.Header, block.Seed, s.diff, util.ToHex(int64(block.Height))}
+			err := cs.pushNewJob(&replyBlock)
 			<-bcast
 			if err != nil {
 				log.Printf("Job transmit error to %v@%v: %v", cs.login, cs.ip, err)
@@ -215,7 +218,8 @@ func (s *ProxyServer) broadcastNewJobs() {
 			} else {
 				s.setDeadline(cs.conn)
 			}
+			log.Printf("Broadcasting new job to %s stratum miners, %v, %s, height:, %s", cs.login, n, time.Since(start), int64(block.Height))
 		}(m)
 	}
-	log.Printf("Jobs broadcast finished %s", time.Since(start))
+	//log.Printf("Jobs broadcast finished %s", time.Since(start))
 }

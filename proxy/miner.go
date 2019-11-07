@@ -44,6 +44,7 @@ func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, param
 	if !ethash_hasher.Verify(share) {
 		return false, false
 	}
+	log.Printf("---shard and block diff, height, %v, %v, %v", share.difficulty, block.difficulty, h.height)
 
 	if ethash_hasher.Verify(block) {
 		ok, err := s.rpc().SubmitBlock(s.config.Proxy.Stratum.ShardId, params)

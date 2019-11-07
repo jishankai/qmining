@@ -6,13 +6,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"fmt"
 	"hash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/sammy007/open-ethereum-pool/rpc"
-	"github.com/sammy007/open-ethereum-pool/util"
+	//"github.com/sammy007/open-ethereum-pool/util"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -59,59 +60,68 @@ func (b Block) NumberU64() uint64        { return b.number }
 
 func (s *ProxyServer) fetchBlockTemplate() {
 	rpc := s.rpc()
-	t := s.currentBlockTemplate()
-	pendingReply, height, _, err := s.fetchPendingBlock()
-	if pendingReply == nil {
-		log.Printf("Error can not fetch pending block on %s", rpc.Name)
-		return 
-	}
-	if err != nil {
-		log.Printf("Error while refreshing pending block on %s: %s", rpc.Name, err)
-		return
-	}
-	reply, err := rpc.GetWork(s.config.Proxy.Stratum.ShardId)
-	if err != nil {
-		log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
-		return
-	}
-	// No need to update, we have fresh job
-	if t != nil && t.Header == reply[0] {
-		return
-	}
-
-	pendingReply.Difficulty = util.ToHex(s.config.Proxy.Difficulty)
-	diff_template := DiffHexToDiff(reply[2])
-	height_temp := HexToInt64(reply[1])
-	seed := seedHash(height_temp)
-	// Seed equals to hex string Height
-	newTemplate := BlockTemplate{
-		Header:               reply[0],
-		Seed:                 fmt.Sprintf("0x%x", seed),
-		Target:               GetTargetHexFromDiff(diff_template),
-		Height:               height_temp,
-		Difficulty:           diff_template,
-		//Difficulty:           big.NewInt(diff),
-		GetPendingBlockCache: pendingReply,
-		headers:              make(map[string]heightDiffPair),
-	}
-	// Copy job backlog and add current one
-	newTemplate.headers[reply[0]] = heightDiffPair{
-		diff:   diff_template,
-		height: HexToInt64(reply[1]),
-	}
-	if t != nil {
-		for k, v := range t.headers {
-			if v.height > height-maxBacklog {
-				newTemplate.headers[k] = v
+	count := 0
+	//GetWork for all miners seperately
+	for m, _ := range s.sessions {
+		go func(cs *Session) {
+			s.updateMap[cs.login] = false
+			reply, err := rpc.GetWorkWithID(s.config.Proxy.Stratum.ShardId, cs.login)
+			if err != nil {
+				log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
+				return
 			}
-		}
-	}
-	s.blockTemplate.Store(&newTemplate)
-	log.Printf("New block to mine on %s at height %d / %s", rpc.Name, height, reply[0][0:10])
-
-	// Stratum
-	if s.config.Proxy.Stratum.Enabled {
-		go s.broadcastNewJobs()
+			// No need to update, we have fresh job
+			t := s.currentBlockTemplateWithId(cs.login)
+			if (t == nil) {
+				var inital_atomic atomic.Value
+				s.minerBlockTemplateMap[cs.login] = inital_atomic
+			}
+			if t != nil && t.Header == reply[0] {
+				return
+			}
+			diff_template_seperate := DiffHexToDiff(reply[2])
+			height_temp_seperate := HexToInt64(reply[1])
+			seed_seperate := seedHash(height_temp_seperate)
+			guardian_diff_seperate := diff_template_seperate
+			if (len(reply) == 4) {
+				guardian_diff_seperate = new(big.Int).Div(diff_template_seperate, new(big.Int).SetInt64(10000))
+			}
+			// Seed equals to hex string Height
+			nTemplate := BlockTemplate{
+				Header:               reply[0],
+				Seed:                 fmt.Sprintf("0x%x", seed_seperate),
+				Target:               GetTargetHexFromDiff(guardian_diff_seperate),
+				Height:               height_temp_seperate,
+				Difficulty:           guardian_diff_seperate,
+				//Difficulty:           big.NewInt(diff),
+				GetPendingBlockCache: nil,
+				headers:              make(map[string]heightDiffPair),
+			}
+			// Copy job backlog and add current one
+			nTemplate.headers[reply[0]] = heightDiffPair{
+				diff:   guardian_diff_seperate,
+				height: HexToInt64(reply[1]),
+			}
+			if t != nil {
+				for k, v := range t.headers {
+					//if v.height > height-maxBacklog {
+					nTemplate.headers[k] = v
+					//}
+				}
+			} 
+			atomic_temp := s.minerBlockTemplateMap[cs.login]
+			atomic_temp.Store(&nTemplate)
+			s.minerBlockTemplateMap[cs.login] = atomic_temp
+			s.updateMap[cs.login] = true
+			count++
+			if t != nil && t.Height > s.Height {
+				s.Height = t.Height
+				s.Difficulty = t.Difficulty
+			}
+			if s.config.Proxy.Stratum.Enabled {
+				go s.broadcastNewJobs()
+			}
+		}(m)
 	}
 }
 
@@ -134,9 +144,6 @@ func (s *ProxyServer) fetchPendingBlock() (*rpc.GetBlockReplyPart, uint64, int64
 	}
 	return reply, blockNumber, blockDiff, nil
 }
-
-
-
 
 // makeHasher creates a repetitive hasher, allowing the same hash data structures to
 // be reused between hash runs instead of requiring new ones to be created. The returned

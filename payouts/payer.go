@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"os/exec"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -28,8 +30,9 @@ type PayoutsConfig struct {
 	GasPrice     string `json:"gasPrice"`
 	AutoGas      bool   `json:"autoGas"`
 	// In Shannon
-	Threshold int64 `json:"threshold"`
-	BgSave    bool  `json:"bgsave"`
+	Threshold	int64 `json:"threshold"`
+	BgSave		bool  `json:"bgsave"`
+	ShardId		string  `json:"shardId"`
 }
 
 func (self PayoutsConfig) GasHex() string {
@@ -58,6 +61,8 @@ func NewPayoutsProcessor(cfg *PayoutsConfig, backend *storage.RedisClient) *Payo
 
 func (u *PayoutsProcessor) Start() {
 	log.Println("Starting payouts")
+
+
 
 	if u.mustResolvePayout() {
 		log.Println("Running with env RESOLVE_PAYOUT=1, now trying to resolve locked payouts")
@@ -117,7 +122,9 @@ func (u *PayoutsProcessor) process() {
 	}
 
 	for _, login := range payees {
+		fmt.Println("login payees is: %v", login)
 		amount, _ := u.backend.GetBalance(login)
+		fmt.Println("amount is: %v", amount)
 		amountInShannon := big.NewInt(amount)
 
 		// Shannon^2 = Wei
@@ -129,9 +136,9 @@ func (u *PayoutsProcessor) process() {
 		mustPay++
 
 		// Require active peers before processing
-		if !u.checkPeers() {
-			break
-		}
+		//if !u.checkPeers() {
+		//	break
+		//}
 		// Require unlocked account
 		if !u.isUnlockedAccount() {
 			break
@@ -171,9 +178,25 @@ func (u *PayoutsProcessor) process() {
 			break
 		}
 
-		value := hexutil.EncodeBig(amountInWei)
-		txHash, err := u.rpc.SendTransaction(u.config.Address, login, u.config.GasHex(), u.config.GasPriceHex(), value, u.config.AutoGas)
+		//value := hexutil.EncodeBig(amountInWei)
+		// Send transactions to pay
+
+		err = os.Setenv("KEY", "...")
 		if err != nil {
+			log.Printf("err %v", err)
+			u.halt = true
+			u.lastFail = err
+			break
+		}
+		fmt.Println("shardId is: %v", u.config.ShardId)
+		stringCommand := "source ~/virtualenv/qc/bin/activate; python3 ~/mainnet-utils/pysrc/batch_send_tx.py --address " + login + " --shardId " + u.config.ShardId + " --value " + amountInShannon.String() + "; deactivate"
+		cmd := exec.Command("bash", "-c", stringCommand)
+		//cmd := exec.Command("bash", "-c", "source ~/virtualenv/qc/bin/activate; python3 ~/mainnet-utils/pysrc/batch_send_tx.py --address 0x248Dc97675f46Cb2AeCa53006F647ED94eF5B502 --value 1; deactivate")
+		out_txHash, _ := cmd.CombinedOutput()
+		txHash := strings.TrimSpace(string(out_txHash))
+		fmt.Println("----------------txHash is : %v", txHash)
+		//txHash, err := u.rpc.SendTransaction(u.config.Address, login, u.config.GasHex(), u.config.GasPriceHex(), value, u.config.AutoGas)
+		if txHash == "0x000000000000000000000000000000000000000000000000000000000000000000000000" {
 			log.Printf("Failed to send payment to %s, %v Shannon: %v. Check outgoing tx for %s in block explorer and docs/PAYOUTS.md",
 				login, amount, err, login)
 			u.halt = true
@@ -228,11 +251,11 @@ func (u *PayoutsProcessor) process() {
 }
 
 func (self PayoutsProcessor) isUnlockedAccount() bool {
-	_, err := self.rpc.Sign(self.config.Address, "0x0")
-	if err != nil {
-		log.Println("Unable to process payouts:", err)
-		return false
-	}
+	//_, err := self.rpc.Sign(self.config.Address, "0x0")
+	//if err != nil {
+	//	log.Println("Unable to process payouts:", err)
+	//	return false
+	//}
 	return true
 }
 

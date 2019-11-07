@@ -5,11 +5,12 @@ import (
 	"log"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"strconv"
+	"io/ioutil"
 
 	"github.com/gorilla/mux"
 
@@ -108,7 +109,8 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/miners", s.MinersIndex)
 	r.HandleFunc("/api/blocks", s.BlocksIndex)
 	r.HandleFunc("/api/payments", s.PaymentsIndex)
-	r.HandleFunc("/api/accounts/{login:0x[0-9a-fA-F]{40}}", s.AccountIndex)
+	r.HandleFunc("/api/accounts", s.AccountIndex)
+	r.HandleFunc("/api/QkcPrices", s.GetCoinQKC)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
 	err := http.ListenAndServe(s.config.Listen, r)
 	if err != nil {
@@ -121,6 +123,34 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusNotFound)
+}
+
+func (s *ApiServer) GetCoinQKC(w http.ResponseWriter, r *http.Request) {
+   w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+   w.Header().Set("Access-Control-Allow-Origin", "*")
+   w.Header().Set("Cache-Control", "no-cache")
+   w.WriteHeader(http.StatusOK)
+   resp, err := http.Get("https://api.coingecko.com/api/v3/coins/quark-chain")
+   if err != nil {
+      log.Println( err)
+   }
+   defer resp.Body.Close()
+   body, err := ioutil.ReadAll(resp.Body)
+   if err != nil {
+      // handle error
+      w.Write([]byte(err.Error()))
+   }
+   reply := make(map[string]interface{})
+   m := make(map[string]interface{})
+   err = json.Unmarshal(body, &m)
+   if err != nil {
+	   log.Println("Error Unmarshal json: ", err)
+   }
+   reply["market_data"] = (m["market_data"].(map[string]interface{}))["current_price"]
+   err = json.NewEncoder(w).Encode(reply)
+   if err != nil {
+	   log.Println("Error serializing API response: ", err)
+   }
 }
 
 func (s *ApiServer) purgeStale() {
@@ -215,7 +245,7 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
 
 	if err_int != nil {
-		log.Println("Error serializing API page: ", err_int)
+		log.Println("Block Error serializing API page: ", err_int)
 	}
 
 	pageSize := limit
@@ -228,17 +258,12 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 		upperBound := pageSize * page
 		totalInt := int64(len(stats["matured"].([]*storage.BlockData)[:]))
 		if upperBound > totalInt {
-			upperBound = totalInt
+				upperBound = totalInt
 		}
 		reply["data"] = stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]
-		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]))
-		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize
-		reply["count"] = stats["maturedTotal"]
-		//reply["immature"] = stats["immature"]
-		//reply["immatureTotal"] = stats["immatureTotal"]
-		//reply["candidates"] = stats["candidates"].([]*storage.BlockData)[:50]
-		//reply["candidatesTotal"] = stats["candidatesTotal"]
-		//reply["luck"] = stats["luck"]
+		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound])) 
+		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize 
+		reply["count"] = totalInt
 	}
 	reply["code"] = 0
 	reply["msg"] = ""
@@ -257,9 +282,7 @@ func (s *ApiServer) PaymentsIndex(w http.ResponseWriter, r *http.Request) {
 
 	reply := make(map[string]interface{})
 	stats := s.getStats()
-
-	stats["payments"] = []string{}
-
+	reply["payments"] = []string{}
 	if stats != nil {
 		reply["payments"] = stats["payments"]
 		reply["paymentsTotal"] = stats["paymentsTotal"]
@@ -276,7 +299,25 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 
-	login := strings.ToLower(mux.Vars(r)["login"])
+	//login := strings.ToLower(mux.Vars(r)["login"])
+
+	login_query := r.URL.Query().Get("login")
+	login := strings.ToLower(login_query)
+	if len(login) != 42 {
+		log.Println("Url Param 'login' is missing")
+		return
+	}
+
+        page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
+
+        limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
+
+        if err_int != nil || limit <= 0 {
+		return
+		log.Println("limit", limit)
+                log.Println("Account Error serializing API page: ", err_int)
+        }
+
 	s.minersMu.Lock()
 	defer s.minersMu.Unlock()
 
@@ -289,13 +330,15 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 		if !exist {
 			w.WriteHeader(http.StatusOK)
 			okb := make(map[string]interface{})
-			okb["code"] = 404
+			okb["code"] = 0
+			okb["msg"] = "404"
+			okb["count"] = 0
+			okb["data"] = make([]string, 0)
 			err := json.NewEncoder(w).Encode(okb)
 			if err != nil {
 				log.Println("Error serializing API response: ", err)
+				log.Println("Url param 'login' is missing")
 			}
-			log.Println("Url Param 'login' is missing")
-			//w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		if err != nil {
@@ -320,6 +363,16 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 			stats[key] = value
 		}
 		stats["pageSize"] = s.config.Payments
+		lowerBound := limit * (page - 1)
+		upperBound := limit * page
+		totalPayments := stats["paymentsTotal"].(int64)
+		if upperBound > totalPayments {
+			upperBound = totalPayments
+		}
+		stats["payments"] = stats["payments"].([]map[string]interface{})[lowerBound:upperBound]
+		stats["code"] = 0
+		stats["msg"] = ""
+		stats["count"] = totalPayments
 		reply = &Entry{stats: stats, updatedAt: now}
 		s.miners[login] = reply
 	}

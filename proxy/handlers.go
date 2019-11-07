@@ -34,7 +34,7 @@ func (s *ProxyServer) handleLoginRPC(cs *Session, params []string, id string) (b
 }
 
 func (s *ProxyServer) handleGetWorkRPC(cs *Session) ([]string, *ErrorReply) {
-	t := s.currentBlockTemplate()
+	t := s.currentBlockTemplateWithId(cs.login)
 	if t == nil || len(t.Header) == 0 || s.isSick() {
 		return nil, &ErrorReply{Code: 0, Message: "Work not ready"}
 	}
@@ -68,8 +68,8 @@ func (s *ProxyServer) handleSubmitRPC(cs *Session, login, id string, params []st
 		log.Printf("Malformed PoW result from %s@%s %v", login, cs.ip, params)
 		return false, &ErrorReply{Code: -1, Message: "Malformed PoW result"}
 	}
-	t := s.currentBlockTemplate()
-	exist, validShare := s.processShare(login, id, cs.ip, t, params)
+	block := s.currentBlockTemplateWithId(login)
+	exist, validShare := s.processShare(login, id, cs.ip, block, params)
 	ok := s.policy.ApplySharePolicy(cs.ip, !exist && validShare)
 
 	if exist {

@@ -26,9 +26,10 @@ type UnlockerConfig struct {
 	Interval       string  `json:"interval"`
 	Daemon         string  `json:"daemon"`
 	Timeout        string  `json:"timeout"`
+	ShardId        string  `json:"shardId"`
 }
 
-const minDepth = 16
+const minDepth = 8
 const byzantiumHardForkHeight = 4370000
 
 var homesteadReward = math.MustParseBig256("5000000000000000000")
@@ -36,7 +37,7 @@ var byzantiumReward = math.MustParseBig256("3000000000000000000")
 
 // Donate 10% from pool fees to developers
 const donationFee = 10.0
-const donationAccount = "0xb85150eb365e7df0941f0cf08235f987ba91506a"
+const donationAccount = "0xAAdB54c8fB14f588AfA3Bb118b8AbDE7EE1928c700000000"
 
 type BlockUnlocker struct {
 	config   *UnlockerConfig
@@ -116,7 +117,7 @@ func (u *BlockUnlocker) unlockCandidates(candidates []*storage.BlockData) (*Unlo
 				continue
 			}
 
-			block, err := u.rpc.GetBlockByHeight(height)
+			block, err := u.rpc.GetBlockByHeight(u.config.ShardId, height)
 			if err != nil {
 				log.Printf("Error while retrieving block %v from node: %v", height, err)
 				return nil, err
@@ -208,18 +209,19 @@ func (u *BlockUnlocker) handleBlock(block *rpc.GetBlockReply, candidate *storage
 		return err
 	}
 	candidate.Height = correctHeight
-	reward := getConstReward(candidate.Height)
+	
+	//reward := getConstReward(candidate.Height)
 
 	// Add TX fees
-	extraTxReward, err := u.getExtraRewardForTx(block)
-	if err != nil {
-		return fmt.Errorf("Error while fetching TX receipt: %v", err)
-	}
-	if u.config.KeepTxFees {
-		candidate.ExtraReward = extraTxReward
-	} else {
-		reward.Add(reward, extraTxReward)
-	}
+	//extraTxReward, err := u.getExtraRewardForTx(block)
+	//if err != nil {
+	//	return fmt.Errorf("Error while fetching TX receipt: %v", err)
+	//}
+	//if u.config.KeepTxFees {
+	//	candidate.ExtraReward = extraTxReward
+	//} else {
+	//	reward.Add(reward, extraTxReward)
+	//}
 
 	// Add reward for including uncles
 	//uncleReward := getRewardForUncle(candidate.Height)
@@ -228,6 +230,15 @@ func (u *BlockUnlocker) handleBlock(block *rpc.GetBlockReply, candidate *storage
 
 	candidate.Orphan = false
 	candidate.Hash = block.Hash
+
+	reward := new(big.Int)
+	for _, coinbase_map := range block.Coinbase {
+		if coinbase_map.TokenStr !=  "QKC" {
+			continue
+		}
+		candidate.RewardString = strings.Replace(coinbase_map.Balance, "0x", "", -1)
+	}
+	reward.SetString(candidate.RewardString, 16)
 	candidate.Reward = reward
 	return nil
 }
@@ -252,14 +263,14 @@ func (u *BlockUnlocker) unlockPendingBlocks() {
 		return
 	}
 
-	current, err := u.rpc.GetPendingBlock("0x1")
+	current, err := u.rpc.GetLastestRootBlock()
 	if err != nil {
 		u.halt = true
 		u.lastFail = err
 		log.Printf("Unable to get current blockchain height from node: %v", err)
 		return
 	}
-	currentHeight, err := strconv.ParseInt(strings.Replace(current.Number, "0x", "", -1), 16, 64)
+	currentHeight, err := strconv.ParseInt(strings.Replace(current, "0x", "", -1), 16, 64)
 	if err != nil {
 		u.halt = true
 		u.lastFail = err
@@ -267,7 +278,21 @@ func (u *BlockUnlocker) unlockPendingBlocks() {
 		return
 	}
 
-	candidates, err := u.backend.GetCandidates(currentHeight - u.config.ImmatureDepth)
+	finalized_current, err := u.rpc.GetRootBlockByHeight(u.config.ShardId, currentHeight - u.config.ImmatureDepth)
+
+	if finalized_current == "" {
+		return 
+	}
+
+	finalized_height, err := strconv.ParseInt(strings.Replace(finalized_current, "0x", "", -1), 16, 64)
+	if err != nil {
+		u.halt = true
+		u.lastFail = err
+		log.Printf("Can't parse the latest minor blocks height: %v", err)
+		return
+	}
+
+	candidates, err := u.backend.GetCandidates(finalized_height)
 	if err != nil {
 		u.halt = true
 		u.lastFail = err
@@ -350,14 +375,14 @@ func (u *BlockUnlocker) unlockAndCreditMiners() {
 		return
 	}
 
-	current, err := u.rpc.GetPendingBlock("0x1")
+	current, err := u.rpc.GetLastestRootBlock()
 	if err != nil {
 		u.halt = true
 		u.lastFail = err
 		log.Printf("Unable to get current blockchain height from node: %v", err)
 		return
 	}
-	currentHeight, err := strconv.ParseInt(strings.Replace(current.Number, "0x", "", -1), 16, 64)
+	currentHeight, err := strconv.ParseInt(strings.Replace(current, "0x", "", -1), 16, 64)
 	if err != nil {
 		u.halt = true
 		u.lastFail = err
@@ -365,7 +390,22 @@ func (u *BlockUnlocker) unlockAndCreditMiners() {
 		return
 	}
 
-	immature, err := u.backend.GetImmatureBlocks(currentHeight - u.config.Depth)
+	finalized_current, err := u.rpc.GetRootBlockByHeight(u.config.ShardId, currentHeight - u.config.Depth)
+
+	if finalized_current == "" {
+		return
+	}
+
+	finalized_height, err := strconv.ParseInt(strings.Replace(finalized_current, "0x", "", -1), 16, 64)
+	if err != nil {
+		u.halt = true
+		u.lastFail = err
+		log.Printf("Can't parse the latest minor blocks height in unlockedAndCreditMiners function: %v", err)
+		return
+	}
+
+
+	immature, err := u.backend.GetImmatureBlocks(finalized_height)
 	if err != nil {
 		u.halt = true
 		u.lastFail = err

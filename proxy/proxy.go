@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"math/big"
 
 	"github.com/gorilla/mux"
 
@@ -30,10 +31,15 @@ type ProxyServer struct {
 	hashrateExpiration time.Duration
 	failsCount         int64
 
+	Difficulty           *big.Int
+	Height               uint64
+
 	// Stratum
 	sessionsMu sync.RWMutex
 	sessions   map[*Session]struct{}
 	timeout    time.Duration
+	minerBlockTemplateMap  map[string]atomic.Value
+	updateMap map[string]bool
 }
 
 type Session struct {
@@ -54,8 +60,12 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 
 	proxy := &ProxyServer{config: cfg, backend: backend, policy: policy}
 	proxy.diff = util.GetTargetHex(cfg.Proxy.Difficulty)
+	proxy.Height = 0
+	proxy.Difficulty = new(big.Int)
 
 	proxy.upstreams = make([]*rpc.RPCClient, len(cfg.Upstream))
+	proxy.minerBlockTemplateMap = make(map[string]atomic.Value)
+	proxy.updateMap = make(map[string]bool)
 	for i, v := range cfg.Upstream {
 		proxy.upstreams[i] = rpc.NewRPCClient(v.Name, v.Url, v.Timeout)
 		log.Printf("Upstream: %s => %s", v.Name, v.Url)
@@ -105,16 +115,16 @@ func NewProxy(cfg *Config, backend *storage.RedisClient) *ProxyServer {
 		for {
 			select {
 			case <-stateUpdateTimer.C:
-				t := proxy.currentBlockTemplate()
-				if t != nil {
-					err := backend.WriteNodeState(cfg.Name, t.Height, t.Difficulty)
+				//t := proxy.currentBlockTemplate()
+				//if t != nil {
+					err := backend.WriteNodeState(cfg.Name, proxy.Height, proxy.Difficulty)
 					if err != nil {
 						log.Printf("Failed to write node state to backend: %v", err)
 						proxy.markSick()
 					} else {
 						proxy.markOk()
 					}
-				}
+				//}
 				stateUpdateTimer.Reset(stateUpdateIntv)
 			}
 		}
@@ -258,9 +268,9 @@ func (cs *Session) handleMessage(s *ProxyServer, r *http.Request, req *JSONRpcRe
 			errReply := &ErrorReply{Code: -1, Message: "Malformed request"}
 			cs.sendError(req.Id, errReply)
 		}
-	case "eth_getBlockByNumber":
-		reply := s.handleGetBlockByNumberRPC()
-		cs.sendResult(req.Id, reply)
+	//case "eth_getBlockByNumber":
+	//	reply := s.handleGetBlockByNumberRPC()
+	//	cs.sendResult(req.Id, reply)
 	case "eth_submitHashrate":
 		cs.sendResult(req.Id, true)
 	default:
@@ -288,6 +298,19 @@ func (s *ProxyServer) currentBlockTemplate() *BlockTemplate {
 	t := s.blockTemplate.Load()
 	if t != nil {
 		return t.(*BlockTemplate)
+	} else {
+		return nil
+	}
+}
+
+func (s *ProxyServer) currentBlockTemplateWithId(login string) *BlockTemplate {
+	t, ok := s.minerBlockTemplateMap[login]
+	if (!ok) {
+		return nil
+	}
+	tt := t.Load()
+	if (tt != nil) {
+		return tt.(*BlockTemplate)
 	} else {
 		return nil
 	}

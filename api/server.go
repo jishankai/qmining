@@ -264,6 +264,11 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound])) 
 		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize 
 		reply["count"] = totalInt
+		//reply["immature"] = stats["immature"]
+		//reply["immatureTotal"] = stats["immatureTotal"]
+		//reply["candidates"] = stats["candidates"].([]*storage.BlockData)[:50]
+		//reply["candidatesTotal"] = stats["candidatesTotal"]
+		//reply["luck"] = stats["luck"]
 	}
 	reply["code"] = 0
 	reply["msg"] = ""

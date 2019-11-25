@@ -43,6 +43,9 @@ type Proxy struct {
 
 	MaxFails    int64 `json:"maxFails"`
 	HealthCheck bool  `json:"healthCheck"`
+	ByteCode string  `json:"byteCode"`
+	Admin string  `json:"admin"`
+	Fee int64 `json:"fee"`
 
 	Stratum Stratum `json:"stratum"`
 }

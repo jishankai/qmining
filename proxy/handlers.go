@@ -4,6 +4,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"strconv"
 
 	"github.com/sammy007/open-ethereum-pool/rpc"
 	"github.com/sammy007/open-ethereum-pool/util"
@@ -26,6 +27,22 @@ func (s *ProxyServer) handleLoginRPC(cs *Session, params []string, id string) (b
 	}
 	if !s.policy.ApplyLoginPolicy(login, cs.ip) {
 		return false, &ErrorReply{Code: -1, Message: "You are blacklisted"}
+	}
+	rpc := s.rpc()
+	var str = login + "000" + (s.config.Proxy.Stratum.ShardId)[2:]
+	reply, _ := rpc.GetCode(str)
+	if s.config.Proxy.ByteCode != "" && reply != s.config.Proxy.ByteCode {
+		return false, &ErrorReply{Code: -1, Message: "Invalid smart contract bytecode"}
+	}
+	admin, _ := rpc.GetStorageAt(str, 8)
+	if  s.config.Proxy.Admin != "" && admin != s.config.Proxy.Admin {
+		return false, &ErrorReply{Code: -1, Message: "Invalid smart contract pool maintainer"}
+	}
+
+	fee, _ := rpc.GetStorageAt(str, 9)
+	feeInt, _ := strconv.ParseInt(strings.Replace(fee, "0x", "", -1), 10, 64)
+	if s.config.Proxy.Fee != 0 && feeInt < s.config.Proxy.Fee {
+		return false, &ErrorReply{Code: -1, Message: "Invalid smart contract pool fee"}
 	}
 	cs.login = login
 	s.registerSession(cs)

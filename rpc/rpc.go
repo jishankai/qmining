@@ -411,3 +411,23 @@ func (r *RPCClient) markAlive() {
 	}
 	r.Unlock()
 }
+
+func (r *RPCClient) GetCode(login string) (string, error) {
+	rpcResp, err := r.doPost(r.Url, "getCode", []string{login})
+	if err != nil {
+		return "", err
+	}
+	var reply string
+	err = json.Unmarshal(*rpcResp.Result, &reply)
+	return reply, err
+}
+
+func (r *RPCClient) GetStorageAt(login string, key uint64) (string, error) {
+	rpcResp, err := r.doPost(r.Url, "getStorageAt", []string{login, fmt.Sprintf("0x%x", key)})
+	if err != nil {
+		return "", err
+	}
+	var reply string
+	err = json.Unmarshal(*rpcResp.Result, &reply)
+	return reply, err
+}

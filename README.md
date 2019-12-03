@@ -205,13 +205,13 @@ Mainnet_pool_standard_AMI_05_06 (ami-0d838d064757dd87b) (Oregen, Singapore, and 
 | ---           | ---          | ---  | ---  | ---  | --- |
 | Root Chain    | Ethash       | 8000 | 8888 | 8079 | 6379 | 
 | Shard 0       | Ethash       | 8008 | 8888 | 8080 | 6379 | 
-| Shard 1       | Ethash       | 8018 | 8881 | 8081 | 6379 | 
-| Shard 2       | Ethash       | 8028 | 8882 | 8082 | 6379 | 
-| Shard 3       | Ethash       | 8038 | 8883 | 8083 | 6379 | 
-| Shard 4       | Ethash       | 8048 | 8884 | 8084 | 6379 | 
-| Shard 5       | Ethash       | 8058 | 8885 | 8085 | 6379 | 
-| Shard 6       | Qkchash      | 8068 | 8886 | 8086 | 6378 | 
-| Shard 7       | Qkchash      | 8078 | 8887 | 8087 | 6378 | 
+| Shard 1       | Ethash       | 8018 | 8881 | 8081 | 6378 | 
+| Shard 2       | Ethash       | 8028 | 8882 | 8082 | 6377 | 
+| Shard 3       | Ethash       | 8038 | 8883 | 8083 | 6376 | 
+| Shard 4       | Ethash       | 8048 | 8884 | 8084 | 6375 | 
+| Shard 5       | Ethash       | 8058 | 8885 | 8085 | 6374 | 
+| Shard 6       | Qkchash      | 8068 | 8886 | 8086 | 6373 | 
+| Shard 7       | Qkchash      | 8078 | 8887 | 8087 | 6372 | 
 
 
 |Chain |Shard |Hash Algo |Parameter for Ethminer shard ID|

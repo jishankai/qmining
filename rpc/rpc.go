@@ -6,16 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
-	"log"
 
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/sammy007/open-ethereum-pool/util"
+)
+
+var (
+	currentShardId string
 )
 
 type RPCClient struct {
@@ -29,24 +33,24 @@ type RPCClient struct {
 }
 
 type GetBlockReply struct {
-	Number       string   `json:"height"`
-	Hash         string   `json:"hash"`
-	Nonce        string   `json:"nonce"`
-	Miner        string   `json:"miner"`
-	Difficulty   string   `json:"difficulty"`
-	GasLimit     string   `json:"gasLimit"`
-	GasUsed      string   `json:"gasUsed"`
-	Coinbase     []CoinBase   `json:"coinbase"`
-	Transactions []Tx     `json:"transactions"`
+	Number       string     `json:"height"`
+	Hash         string     `json:"hash"`
+	Nonce        string     `json:"nonce"`
+	Miner        string     `json:"miner"`
+	Difficulty   string     `json:"difficulty"`
+	GasLimit     string     `json:"gasLimit"`
+	GasUsed      string     `json:"gasUsed"`
+	Coinbase     []CoinBase `json:"coinbase"`
+	Transactions []Tx       `json:"transactions"`
 	//Uncles       []string `json:"uncles"`
 	// https://github.com/ethereum/EIPs/issues/95
 	// SealFields []string `json:"sealFields"`
 }
 
-type  CoinBase struct {
-	TokenId      string   `json:"tokenId"`
-	TokenStr     string   `json:"tokenStr"`
-	Balance      string   `json:"balance"`
+type CoinBase struct {
+	TokenId  string `json:"tokenId"`
+	TokenStr string `json:"tokenStr"`
+	Balance  string `json:"balance"`
 }
 
 type GetBlockReplyPart struct {
@@ -82,24 +86,24 @@ type Tx struct {
 }
 
 type AccountBalance struct {
-	Balance   []CoinBase  `json:"balances"`
+	Balance []CoinBase `json:"balances"`
 }
 
 // Get root block reply format
 type GetRootBlockReply struct {
-	Number			string					`json:"height"`
-	Hash			string					`json:"hash"`
-	Nonce			string					`json:"nonce"`
-	Miner			string					`json:"miner"`
-	Difficulty		string					`json:"difficulty"`
-	MinorBlockHeaders	[]MinorBlockHeader			`json:"minorBlockHeaders"`
+	Number            string             `json:"height"`
+	Hash              string             `json:"hash"`
+	Nonce             string             `json:"nonce"`
+	Miner             string             `json:"miner"`
+	Difficulty        string             `json:"difficulty"`
+	MinorBlockHeaders []MinorBlockHeader `json:"minorBlockHeaders"`
 }
 
 // Get minor block header
 type MinorBlockHeader struct {
-	Height			 string   `json:"height"`
-	Hash			 string   `json:"hash"`
-	FullShardId		 string   `json:"fullShardId"`
+	Height      string `json:"height"`
+	Hash        string `json:"hash"`
+	FullShardId string `json:"fullShardId"`
 }
 
 type JSONRpcResp struct {
@@ -128,6 +132,7 @@ func (r *RPCClient) GetWork(shardId string) ([]string, error) {
 }
 
 func (r *RPCClient) GetWorkWithID(shardId string, login string) ([]string, error) {
+	currentShardId = shardId
 	rpcResp, err := r.doPost(r.Url, "getWork", []string{shardId, login})
 	if err != nil {
 		return nil, err
@@ -233,7 +238,7 @@ func (r *RPCClient) GetRootBlockByHeight(shardId string, height int64) (string, 
 			return correct_height, err
 		}
 		for _, minorBlock := range reply.MinorBlockHeaders {
-			//var minor_reply *MinorBlockHeader 
+			//var minor_reply *MinorBlockHeader
 			//err_minor := json.Unmarshal(*minorBlocks, &minor_reply)
 			//if err_minor != nil {
 			//	return correct_height, err_minor
@@ -250,7 +255,7 @@ func (r *RPCClient) GetRootBlockByHeight(shardId string, height int64) (string, 
 	return correct_height, nil
 }
 
-func CompareHeight(reply_height string, correct_height string) (bool) {
+func CompareHeight(reply_height string, correct_height string) bool {
 	if correct_height == "" {
 		return true
 	}
@@ -262,30 +267,38 @@ func CompareHeight(reply_height string, correct_height string) (bool) {
 	if err_reply != nil {
 		return false
 	}
-	return replyHeight > correctHeight 
+	return replyHeight > correctHeight
 }
 
 func (r *RPCClient) GetBalance(address string) (*big.Int, error) {
-	rpcResp, err := r.doPost(r.Url, "getBalances", []string{address})
+	qkcAddress := address + "000" + currentShardId[2:len(currentShardId)]
+	log.Printf("get balance  qkcAddress:,%v", qkcAddress)
+	rpcResp, err := r.doPost(r.Url, "getBalances", []string{qkcAddress})
 	if err != nil {
+		log.Printf("get balance  err:,%v", err)
 		return nil, err
 	}
 	//var reply []string
 	var reply *AccountBalance
 	err = json.Unmarshal(*rpcResp.Result, &reply)
 	if err != nil {
+		log.Printf("get balance  err1:,%v", err)
 		return nil, err
 	}
-    var balanceString string
+	var balanceInt64 int64
 	for _, balanceMap := range reply.Balance {
-		if balanceMap.TokenStr !=  "QKC" {
+		if balanceMap.TokenStr != "QKC" {
 			continue
 		}
-		balanceString = balanceMap.Balance
+		balance, _ := new(big.Float).SetString(balanceMap.Balance)
+		log.Printf("get balancemap balance  :%v ", balanceMap.Balance)
+		ten9 := new(big.Int).Exp(big.NewInt(10), big.NewInt(9), big.NewInt(0))
+		log.Printf("get balance  :%v  and  two18:%v", balance, ten9)
+		balanceInt64, _ = new(big.Float).Quo(balance, big.NewFloat(float64(ten9.Int64()))).Int64()
 	}
-	fmt.Println("balacneMap.Balance is: %v", balanceString)
-	fmt.Println("balacneMap.Balance value is : %v", util.String2Big(balanceString))
-	return util.String2Big(balanceString), err
+	fmt.Println("balacneMap.Balance is:", balanceInt64)
+	//fmt.Println("balacneMap.Balance value is : ", util.String2Big(balanceString))
+	return big.NewInt(balanceInt64), err
 }
 
 func (r *RPCClient) Sign(from string, s string) (string, error) {

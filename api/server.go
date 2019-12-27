@@ -2,15 +2,15 @@ package api
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"strconv"
-	"io/ioutil"
 
 	"github.com/gorilla/mux"
 
@@ -111,6 +111,8 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/payments", s.PaymentsIndex)
 	r.HandleFunc("/api/accounts", s.AccountIndex)
 	r.HandleFunc("/api/QkcPrices", s.GetCoinQKC)
+	r.HandleFunc("/api/mills", s.GetMillsIndex)
+	r.HandleFunc("/api/minersTotal", s.MinersTotalIndex)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
 	err := http.ListenAndServe(s.config.Listen, r)
 	if err != nil {
@@ -126,31 +128,31 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ApiServer) GetCoinQKC(w http.ResponseWriter, r *http.Request) {
-   w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-   w.Header().Set("Access-Control-Allow-Origin", "*")
-   w.Header().Set("Cache-Control", "no-cache")
-   w.WriteHeader(http.StatusOK)
-   resp, err := http.Get("https://api.coingecko.com/api/v3/coins/quark-chain")
-   if err != nil {
-      log.Println( err)
-   }
-   defer resp.Body.Close()
-   body, err := ioutil.ReadAll(resp.Body)
-   if err != nil {
-      // handle error
-      w.Write([]byte(err.Error()))
-   }
-   reply := make(map[string]interface{})
-   m := make(map[string]interface{})
-   err = json.Unmarshal(body, &m)
-   if err != nil {
-	   log.Println("Error Unmarshal json: ", err)
-   }
-   reply["market_data"] = (m["market_data"].(map[string]interface{}))["current_price"]
-   err = json.NewEncoder(w).Encode(reply)
-   if err != nil {
-	   log.Println("Error serializing API response: ", err)
-   }
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	resp, err := http.Get("https://api.coingecko.com/api/v3/coins/quark-chain")
+	if err != nil {
+		log.Println(err)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		// handle error
+		w.Write([]byte(err.Error()))
+	}
+	reply := make(map[string]interface{})
+	m := make(map[string]interface{})
+	err = json.Unmarshal(body, &m)
+	if err != nil {
+		log.Println("Error Unmarshal json: ", err)
+	}
+	reply["market_data"] = (m["market_data"].(map[string]interface{}))["current_price"]
+	err = json.NewEncoder(w).Encode(reply)
+	if err != nil {
+		log.Println("Error serializing API response: ", err)
+	}
 }
 
 func (s *ApiServer) purgeStale() {
@@ -166,6 +168,7 @@ func (s *ApiServer) purgeStale() {
 func (s *ApiServer) collectStats() {
 	start := time.Now()
 	stats, err := s.backend.CollectStats(s.hashrateWindow, s.config.Blocks, s.config.Payments)
+	_, err = s.backend.GetMills(s.hashrateWindow)
 	if err != nil {
 		log.Printf("Failed to fetch stats from backend: %v", err)
 		return
@@ -179,6 +182,34 @@ func (s *ApiServer) collectStats() {
 	}
 	s.stats.Store(stats)
 	log.Printf("Stats collection finished %s", time.Since(start))
+}
+
+func (s *ApiServer) GetMillsIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	reply := make(map[string]interface{})
+	data := make(map[string]interface{})
+	miners, err := s.backend.GetMills(s.hashrateWindow)
+	if err != nil {
+		log.Println("GetMillsIndex API err: ", err)
+	}
+	count := 0
+	for _, m := range miners {
+		if m.Offline {
+			count++
+		}
+	}
+	data["millsTotal"] = len(miners)
+	data["millsOffline"] = count
+	reply["code"] = 0
+	reply["msg"] = "success"
+	reply["data"] = data
+	err = json.NewEncoder(w).Encode(reply)
+	if err != nil {
+		log.Println("Error serializing API response: ", err)
+	}
 }
 
 func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +243,26 @@ func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *ApiServer) MinersTotalIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+
+	reply := make(map[string]interface{})
+	stats := s.getStats()
+	if stats != nil {
+		reply["now"] = util.MakeTimestamp()
+		reply["minersTotal"] = stats["minersTotal"]
+		reply["minersOffline"] = stats["minersOffline"]
+	}
+
+	err := json.NewEncoder(w).Encode(reply)
+	if err != nil {
+		log.Println("Error serializing API response: ", err)
+	}
+}
+
 func (s *ApiServer) MinersIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -225,6 +276,7 @@ func (s *ApiServer) MinersIndex(w http.ResponseWriter, r *http.Request) {
 		reply["miners"] = stats["miners"]
 		reply["hashrate"] = stats["hashrate"]
 		reply["minersTotal"] = stats["minersTotal"]
+		reply["minersOffline"] = stats["minersOffline"]
 	}
 
 	err := json.NewEncoder(w).Encode(reply)
@@ -258,11 +310,11 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 		upperBound := pageSize * page
 		totalInt := int64(len(stats["matured"].([]*storage.BlockData)[:]))
 		if upperBound > totalInt {
-				upperBound = totalInt
+			upperBound = totalInt
 		}
 		reply["data"] = stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]
-		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound])) 
-		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize 
+		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]))
+		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize
 		reply["count"] = totalInt
 		//reply["immature"] = stats["immature"]
 		//reply["immatureTotal"] = stats["immatureTotal"]
@@ -313,15 +365,15 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-        page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
+	page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
 
-        limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
+	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
 
-        if err_int != nil || limit <= 0 {
+	if err_int != nil || limit <= 0 {
 		return
 		log.Println("limit", limit)
-                log.Println("Account Error serializing API page: ", err_int)
-        }
+		log.Println("Account Error serializing API page: ", err_int)
+	}
 
 	s.minersMu.Lock()
 	defer s.minersMu.Unlock()

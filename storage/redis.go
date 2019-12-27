@@ -2,14 +2,12 @@ package storage
 
 import (
 	"fmt"
+	"github.com/sammy007/open-ethereum-pool/util"
+	"gopkg.in/redis.v3"
 	"math/big"
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/redis.v3"
-
-	"github.com/sammy007/open-ethereum-pool/util"
 )
 
 type Config struct {
@@ -692,7 +690,6 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 		value["timestamp"] = fmt.Sprintf("%v", timestamp)
 		value["hashrate"] = fmt.Sprintf("%v", totalHashrateTemp)
 		hashrateList[i] = value
-
 	}
 	stats["hashrateList"] = hashrateList
 
@@ -737,13 +734,18 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 
 	s := make([]Miner, len(miners))
 	i := 0
+	count := 0
 	for id, miner := range miners {
 		s[i] = miner
 		s[i].MinerId = id
 		i++
+		if miner.Offline {
+			count++
+		}
 	}
 	stats["miners"] = s
 	stats["minersTotal"] = len(miners)
+	stats["minersOffline"] = count
 	stats["hashrate"] = totalHashrate
 	return stats, nil
 }
@@ -759,7 +761,6 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 	now := util.MakeTimestamp() / 1000
 
 	hashrateList := make([]map[string]interface{}, 24, 24)
-
 	for i := int64(0); i < 24; i++ {
 		timeTemp := now - (i+1)*3600
 		cmdsTemp, _ := tx.Exec(func() error {
@@ -999,7 +1000,6 @@ func convertMinersStats(window int64, raw *redis.ZSliceCmd) (int64, map[string]M
 		}
 		miners[id] = miner
 	}
-
 	for id, miner := range miners {
 		timeOnline := now - miner.startedAt
 		if timeOnline < 600 {
@@ -1022,6 +1022,64 @@ func convertMinersStats(window int64, raw *redis.ZSliceCmd) (int64, map[string]M
 	return totalHashrate, miners
 }
 
+func (r *RedisClient) GetMills(smallWindow time.Duration) (map[string]Miner, error) {
+	window := int64(smallWindow / time.Second)
+	tx := r.client.Multi()
+	defer tx.Close()
+	cmds, err := tx.Exec(func() error {
+		tx.ZRangeWithScores(r.formatKey("hashrate"), 0, -1)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	_, miners := convertMinersStatsById(window/24, cmds[0].(*redis.ZSliceCmd))
+	return miners, nil
+}
+
+func convertMinersStatsById(window int64, raw *redis.ZSliceCmd) (int64, map[string]Miner) {
+	now := util.MakeTimestamp() / 1000
+	miners := make(map[string]Miner)
+	totalHashrate := int64(0)
+
+	for _, v := range raw.Val() {
+		parts := strings.Split(v.Member.(string), ":")
+		share, _ := strconv.ParseInt(parts[0], 10, 64)
+		id := parts[2]
+		score := int64(v.Score)
+		miner := miners[id]
+		miner.HR += share
+		//fmt.Println("current score is %v", score)
+		if miner.LastBeat < score {
+			miner.LastBeat = score
+		}
+		if miner.startedAt > score || miner.startedAt == 0 {
+			miner.startedAt = score
+		}
+		miners[id] = miner
+	}
+
+	for id, miner := range miners {
+		timeOnline := now - miner.startedAt
+		if timeOnline < 600 {
+			timeOnline = 600
+		}
+
+		boundary := timeOnline
+		if timeOnline >= window {
+			boundary = window
+		}
+		miner.HR = miner.HR / boundary
+		//fmt.Println("boundary is", boundary)
+
+		if miner.LastBeat < (now - window/2) {
+			miner.Offline = true
+		}
+		totalHashrate += miner.HR
+		miners[id] = miner
+	}
+	return totalHashrate, miners
+}
 func convertPaymentsResults(raw *redis.ZSliceCmd) []map[string]interface{} {
 	var result []map[string]interface{}
 	for _, v := range raw.Val() {

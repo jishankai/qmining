@@ -1080,6 +1080,7 @@ func convertMinersStatsById(window int64, raw *redis.ZSliceCmd) (int64, map[stri
 	}
 	return totalHashrate, miners
 }
+
 func convertPaymentsResults(raw *redis.ZSliceCmd) []map[string]interface{} {
 	var result []map[string]interface{}
 	for _, v := range raw.Val() {

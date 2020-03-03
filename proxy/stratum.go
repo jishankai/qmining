@@ -194,19 +194,19 @@ func (s *ProxyServer) broadcastNewJobs() {
 	bcast := make(chan int, 1024)
 	n := 0
 
-
 	for m, _ := range s.sessions {
 		n++
 		bcast <- n
-
 		go func(cs *Session) {
+			s.sessionsMu.Lock()
+			defer s.sessionsMu.Unlock()
 			log.Printf("check status: %v, %v, %v", cs.login, s.updateMap[cs.login], n)
 			if s.updateMap[cs.login] == false {
 				return
 			}
 			count++
 			block := s.currentBlockTemplateWithId(cs.login)
-			if (block == nil || len(block.Header) == 0 || s.isSick()) {
+			if block == nil || len(block.Header) == 0 || s.isSick() {
 				return
 			}
 			replyBlock := []string{block.Header, block.Seed, s.diff, util.ToHex(int64(block.Height))}

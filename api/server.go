@@ -111,8 +111,10 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/payments", s.PaymentsIndex)
 	r.HandleFunc("/api/accounts", s.AccountIndex)
 	r.HandleFunc("/api/QkcPrices", s.GetCoinQKC)
-	r.HandleFunc("/api/mills", s.GetMillsIndex)
+	r.HandleFunc("/api/workers", s.GetWorkersIndex)
 	r.HandleFunc("/api/minersTotal", s.MinersTotalIndex)
+	r.HandleFunc("/api/blocksMiner", s.BlocksMinerIndex)
+	r.HandleFunc("/api/profits", s.ProfitIndex)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
 	err := http.ListenAndServe(s.config.Listen, r)
 	if err != nil {
@@ -184,7 +186,7 @@ func (s *ApiServer) collectStats() {
 	log.Printf("Stats collection finished %s", time.Since(start))
 }
 
-func (s *ApiServer) GetMillsIndex(w http.ResponseWriter, r *http.Request) {
+func (s *ApiServer) GetWorkersIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -217,7 +219,6 @@ func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
-
 	reply := make(map[string]interface{})
 	nodes, err := s.backend.GetNodeStates()
 	if err != nil {
@@ -251,12 +252,15 @@ func (s *ApiServer) MinersTotalIndex(w http.ResponseWriter, r *http.Request) {
 
 	reply := make(map[string]interface{})
 	stats := s.getStats()
+	data := make(map[string]interface{})
 	if stats != nil {
-		reply["now"] = util.MakeTimestamp()
-		reply["minersTotal"] = stats["minersTotal"]
-		reply["minersOffline"] = stats["minersOffline"]
+		reply["code"] = 0
+		data["now"] = util.MakeTimestamp()
+		data["minersTotal"] = stats["minersTotal"]
+		data["minersOffline"] = stats["minersOffline"]
+		reply["data"] = data
+		reply["msg"] = "success"
 	}
-
 	err := json.NewEncoder(w).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
@@ -323,9 +327,80 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 		//reply["luck"] = stats["luck"]
 	}
 	reply["code"] = 0
-	reply["msg"] = ""
+	reply["msg"] = "success"
 
 	err := json.NewEncoder(w).Encode(reply)
+	if err != nil {
+		log.Println("Error serializing API response: ", err)
+	}
+}
+
+func (s *ApiServer) BlocksMinerIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	coinbase_query := r.URL.Query().Get("coinbase")
+	coinbase := strings.ToLower(coinbase_query)
+	if len(coinbase) != 42 {
+		log.Println("Url Param 'coinbase' is missing")
+		return
+	}
+
+	page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
+
+	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
+
+	if err_int != nil {
+		log.Println("Block Error serializing API page: ", err_int)
+	}
+	pageSize := limit
+	reply := make(map[string]interface{})
+	stats := make(map[string]interface{})
+	reply["pageSize"] = pageSize
+	reply["page"] = page
+	stats, err := s.backend.CollectMinerBlockStats(coinbase, s.config.Blocks)
+	if stats != nil {
+		lowerBound := pageSize * (page - 1)
+		upperBound := pageSize * page
+		totalInt := int64(len(stats["minerBlockList"].([]*storage.BlockData)[:]))
+		if upperBound > totalInt {
+			upperBound = totalInt
+		}
+		reply["data"] = stats["minerBlockList"].([]*storage.BlockData)[lowerBound:upperBound]
+		reply["limit"] = int64(len(stats["minerBlockList"].([]*storage.BlockData)[lowerBound:upperBound]))
+		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize
+		reply["count"] = totalInt
+	}
+	reply["code"] = 0
+	reply["msg"] = "success"
+	err = json.NewEncoder(w).Encode(reply)
+	if err != nil {
+		log.Println("Error serializing API response: ", err)
+	}
+}
+
+func (s *ApiServer) ProfitIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	coinbase_query := r.URL.Query().Get("coinbase")
+	coinbase := strings.ToLower(coinbase_query)
+	if len(coinbase) != 42 {
+		log.Println("Url Param 'coinbase' is missing")
+		return
+	}
+	reply := make(map[string]interface{})
+	stats := make(map[string]interface{})
+
+	stats, err := s.backend.CollectProfits(coinbase)
+	if stats != nil {
+		reply["profitList"] = stats["profitList"]
+	}
+	reply["code"] = 0
+	reply["msg"] = "success"
+	err = json.NewEncoder(w).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}
@@ -356,12 +431,10 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 
-	//login := strings.ToLower(mux.Vars(r)["login"])
-
-	login_query := r.URL.Query().Get("login")
-	login := strings.ToLower(login_query)
-	if len(login) != 42 {
-		log.Println("Url Param 'login' is missing")
+	coinbase_query := r.URL.Query().Get("coinbase")
+	coinbase := strings.ToLower(coinbase_query)
+	if len(coinbase) != 42 {
+		log.Println("Url Param 'coinbase' is missing")
 		return
 	}
 
@@ -378,12 +451,12 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	s.minersMu.Lock()
 	defer s.minersMu.Unlock()
 
-	reply, ok := s.miners[login]
+	reply, ok := s.miners[coinbase]
 	now := util.MakeTimestamp()
 	cacheIntv := int64(s.statsIntv / time.Millisecond)
 	// Refresh stats if stale
 	if !ok || reply.updatedAt < now-cacheIntv {
-		exist, err := s.backend.IsMinerExists(login)
+		exist, err := s.backend.IsMinerExists(coinbase)
 		if !exist {
 			w.WriteHeader(http.StatusOK)
 			okb := make(map[string]interface{})
@@ -394,7 +467,7 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 			err := json.NewEncoder(w).Encode(okb)
 			if err != nil {
 				log.Println("Error serializing API response: ", err)
-				log.Println("Url param 'login' is missing")
+				log.Println("Url param 'coinbase' is missing")
 			}
 			return
 		}
@@ -404,13 +477,13 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		stats, err := s.backend.GetMinerStats(login, s.config.Payments)
+		stats, err := s.backend.GetMinerStats(coinbase, s.config.Payments)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Failed to fetch stats from backend: %v", err)
 			return
 		}
-		workers, err := s.backend.CollectWorkersStats(s.hashrateWindow, s.hashrateLargeWindow, login)
+		workers, err := s.backend.CollectWorkersStats(s.hashrateWindow, s.hashrateLargeWindow, coinbase)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Failed to fetch stats from backend: %v", err)
@@ -431,7 +504,7 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 		stats["msg"] = ""
 		stats["count"] = totalPayments
 		reply = &Entry{stats: stats, updatedAt: now}
-		s.miners[login] = reply
+		s.miners[coinbase] = reply
 	}
 
 	w.WriteHeader(http.StatusOK)

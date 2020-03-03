@@ -1,16 +1,16 @@
 package proxy
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"hash"
 	"log"
 	"math/big"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"fmt"
-	"hash"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/sammy007/open-ethereum-pool/rpc"
 	//"github.com/sammy007/open-ethereum-pool/util"
@@ -20,7 +20,7 @@ import (
 type hasher func(dest []byte, data []byte)
 
 const (
-	epochLength        = 30000   // Blocks per epoch
+	epochLength = 30000 // Blocks per epoch
 )
 
 var pow256 = math.BigPow(2, 256)
@@ -64,7 +64,9 @@ func (s *ProxyServer) fetchBlockTemplate() {
 	//GetWork for all miners seperately
 	for m, _ := range s.sessions {
 		go func(cs *Session) {
+			s.sessionsMu.Lock()
 			s.updateMap[cs.login] = false
+			s.sessionsMu.Unlock()
 			reply, err := rpc.GetWorkWithID(s.config.Proxy.Stratum.ShardId, cs.login)
 			if err != nil {
 				log.Printf("Error while refreshing block template on %s: %s", rpc.Name, err)
@@ -72,7 +74,7 @@ func (s *ProxyServer) fetchBlockTemplate() {
 			}
 			// No need to update, we have fresh job
 			t := s.currentBlockTemplateWithId(cs.login)
-			if (t == nil) {
+			if t == nil {
 				var inital_atomic atomic.Value
 				s.minerBlockTemplateMap[cs.login] = inital_atomic
 			}
@@ -83,16 +85,16 @@ func (s *ProxyServer) fetchBlockTemplate() {
 			height_temp_seperate := HexToInt64(reply[1])
 			seed_seperate := seedHash(height_temp_seperate)
 			guardian_diff_seperate := diff_template_seperate
-			if (len(reply) == 4) {
+			if len(reply) == 4 {
 				guardian_diff_seperate = new(big.Int).Div(diff_template_seperate, new(big.Int).SetInt64(10000))
 			}
 			// Seed equals to hex string Height
 			nTemplate := BlockTemplate{
-				Header:               reply[0],
-				Seed:                 fmt.Sprintf("0x%x", seed_seperate),
-				Target:               GetTargetHexFromDiff(guardian_diff_seperate),
-				Height:               height_temp_seperate,
-				Difficulty:           guardian_diff_seperate,
+				Header:     reply[0],
+				Seed:       fmt.Sprintf("0x%x", seed_seperate),
+				Target:     GetTargetHexFromDiff(guardian_diff_seperate),
+				Height:     height_temp_seperate,
+				Difficulty: guardian_diff_seperate,
 				//Difficulty:           big.NewInt(diff),
 				GetPendingBlockCache: nil,
 				headers:              make(map[string]heightDiffPair),
@@ -108,11 +110,13 @@ func (s *ProxyServer) fetchBlockTemplate() {
 					nTemplate.headers[k] = v
 					//}
 				}
-			} 
+			}
+			s.sessionsMu.Lock()
 			atomic_temp := s.minerBlockTemplateMap[cs.login]
 			atomic_temp.Store(&nTemplate)
 			s.minerBlockTemplateMap[cs.login] = atomic_temp
 			s.updateMap[cs.login] = true
+			s.sessionsMu.Unlock()
 			count++
 			if t != nil && t.Height > s.Height {
 				s.Height = t.Height
@@ -121,6 +125,7 @@ func (s *ProxyServer) fetchBlockTemplate() {
 			if s.config.Proxy.Stratum.Enabled {
 				go s.broadcastNewJobs()
 			}
+
 		}(m)
 	}
 }
@@ -167,7 +172,6 @@ func makeHasher(h hash.Hash) hasher {
 	}
 }
 
-
 // seedHash is the seed to use for generating a verification cache and the mining
 // dataset.
 func seedHash(block uint64) []byte {
@@ -183,7 +187,7 @@ func seedHash(block uint64) []byte {
 }
 
 func HexToInt64(height string) uint64 {
-	value, _  := strconv.ParseUint(strings.Replace(height, "0x", "", -1), 16, 64)
+	value, _ := strconv.ParseUint(strings.Replace(height, "0x", "", -1), 16, 64)
 	return value
 }
 
@@ -192,7 +196,6 @@ func DiffHexToDiff(diffHex string) *big.Int {
 	diffBytes := common.FromHex(diffHex)
 	return new(big.Int).SetBytes(diffBytes)
 }
-
 
 func GetTargetHexFromDiff(diff *big.Int) string {
 	diff1 := new(big.Int).Div(pow256, diff)

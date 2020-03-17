@@ -1084,7 +1084,7 @@ func convertMinerProfit(raw *redis.ZSliceCmd, login string) (*big.Int, []*BlockD
 	return total, blockList
 }
 
-func (r *RedisClient) GetMills(smallWindow time.Duration) (map[string]Miner, error) {
+func (r *RedisClient) GetWorkers(smallWindow time.Duration) (map[string]Miner, error) {
 	window := int64(smallWindow / time.Second)
 	tx := r.client.Multi()
 	defer tx.Close()

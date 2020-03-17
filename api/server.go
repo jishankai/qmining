@@ -11,9 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
 	"github.com/gorilla/mux"
-
 	"github.com/sammy007/open-ethereum-pool/storage"
 	"github.com/sammy007/open-ethereum-pool/util"
 )
@@ -170,7 +168,7 @@ func (s *ApiServer) purgeStale() {
 func (s *ApiServer) collectStats() {
 	start := time.Now()
 	stats, err := s.backend.CollectStats(s.hashrateWindow, s.config.Blocks, s.config.Payments)
-	_, err = s.backend.GetMills(s.hashrateWindow)
+	_, err = s.backend.GetWorkers(s.hashrateWindow)
 	if err != nil {
 		log.Printf("Failed to fetch stats from backend: %v", err)
 		return
@@ -193,9 +191,9 @@ func (s *ApiServer) GetWorkersIndex(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	reply := make(map[string]interface{})
 	data := make(map[string]interface{})
-	miners, err := s.backend.GetMills(s.hashrateWindow)
+	miners, err := s.backend.GetWorkers(s.hashrateWindow)
 	if err != nil {
-		log.Println("GetMillsIndex API err: ", err)
+		log.Println("GetWorkersIndex API err: ", err)
 	}
 	count := 0
 	for _, m := range miners {
@@ -203,8 +201,8 @@ func (s *ApiServer) GetWorkersIndex(w http.ResponseWriter, r *http.Request) {
 			count++
 		}
 	}
-	data["millsTotal"] = len(miners)
-	data["millsOffline"] = count
+	data["workersTotal"] = len(miners)
+	data["workersOffline"] = count
 	reply["code"] = 0
 	reply["msg"] = "success"
 	reply["data"] = data

@@ -107,7 +107,6 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/blocks", s.BlocksIndex)
 	r.HandleFunc("/api/payments", s.PaymentsIndex)
 	r.HandleFunc("/api/accounts", s.AccountIndex)
-	r.HandleFunc("/api/workers", s.WorkersIndex)
 	r.HandleFunc("/api/blocksMiner", s.BlocksMinerIndex)
 	r.HandleFunc("/api/profits", s.ProfitIndex)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
@@ -151,34 +150,6 @@ func (s *ApiServer) collectStats() {
 	}
 	s.stats.Store(stats)
 	log.Printf("Stats collection finished %s", time.Since(start))
-}
-
-func (s *ApiServer) WorkersIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-	reply := make(map[string]interface{})
-	data := make(map[string]interface{})
-	miners, err := s.backend.GetWorkers(s.hashrateWindow)
-	if err != nil {
-		log.Println("WorkersIndex API err: ", err)
-	}
-	count := 0
-	for _, m := range miners {
-		if m.Offline {
-			count++
-		}
-	}
-	data["workersTotal"] = len(miners)
-	data["workersOffline"] = count
-	reply["code"] = 0
-	reply["msg"] = "success"
-	reply["data"] = data
-	err = json.NewEncoder(w).Encode(reply)
-	if err != nil {
-		log.Println("Error serializing API response: ", err)
-	}
 }
 
 func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {

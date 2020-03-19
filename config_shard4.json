@@ -53,7 +53,7 @@
 		"purgeInterval": "10m",
 		"listen": "0.0.0.0:8084",
 		"statsCollectInterval": "5s",
-		"hashrateWindow": "24h",
+		"hashrateWindow": "30m",
 		"hashrateLargeWindow": "24h",
 		"luckWindow": [64, 128, 256],
 		"payments": 30,

@@ -496,7 +496,7 @@ func (r *RedisClient) WriteMaturedBlock(block *BlockData, roundRewards map[strin
 		for login, amount := range roundRewards {
 			total += amount
 			// NOTICE: Maybe expire round reward entry in 604800 (a week)?
-			//tx.HIncrBy(r.formatKey("miners", login), "balance", amount)
+			tx.HIncrBy(r.formatKey("miners", login), "balance", amount)
 			tx.HSetNX(r.formatKey("credits", block.Height, block.Hash), login, strconv.FormatInt(amount, 10))
 		}
 		tx.Del(creditKey)
@@ -857,23 +857,6 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 	stats["hashrate"] = totalHashrate
 	stats["currentHashrate"] = currentHashrate
 	stats["hashrateList"] = hashrateList
-	return stats, nil
-}
-
-func (r *RedisClient) CollectMinerBlockStats(login string, maxBlocks int64) (map[string]interface{}, error) {
-	stats := make(map[string]interface{})
-	tx := r.client.Multi()
-	defer tx.Close()
-	cmds, err := tx.Exec(func() error {
-		tx.ZRevRangeWithScores(r.formatKey("tsblocks", "matured"), 0, maxBlocks-1)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	_, matured := convertMinerProfit(cmds[0].(*redis.ZSliceCmd), login)
-	stats["minerBlockList"] = matured
-	stats["minerBlockTotal"] = len(matured)
 	return stats, nil
 }
 

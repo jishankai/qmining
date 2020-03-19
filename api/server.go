@@ -107,7 +107,6 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/blocks", s.BlocksIndex)
 	r.HandleFunc("/api/payments", s.PaymentsIndex)
 	r.HandleFunc("/api/accounts/{login:0x[0-9a-fA-F]{40}}", s.AccountIndex)
-	r.HandleFunc("/api/blocksMiner", s.BlocksMinerIndex)
 	r.HandleFunc("/api/profits", s.ProfitIndex)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
 	err := http.ListenAndServe(s.config.Listen, r)
@@ -205,91 +204,24 @@ func (s *ApiServer) MinersIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
-
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 
-	page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
-
-	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
-
-	if err_int != nil {
-		log.Println("Block Error serializing API page: ", err_int)
-	}
-
-	pageSize := limit
 	reply := make(map[string]interface{})
-	reply["pageSize"] = pageSize
-	reply["page"] = page
 	stats := s.getStats()
 	if stats != nil {
-		lowerBound := pageSize * (page - 1)
-		upperBound := pageSize * page
-		totalInt := int64(len(stats["matured"].([]*storage.BlockData)[:]))
-		if upperBound > totalInt {
-			upperBound = totalInt
-		}
-		reply["data"] = stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]
-		reply["limit"] = int64(len(stats["matured"].([]*storage.BlockData)[lowerBound:upperBound]))
-		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize
-		reply["count"] = totalInt
-		//reply["immature"] = stats["immature"]
-		//reply["immatureTotal"] = stats["immatureTotal"]
-		//reply["candidates"] = stats["candidates"].([]*storage.BlockData)[:50]
-		//reply["candidatesTotal"] = stats["candidatesTotal"]
-		//reply["luck"] = stats["luck"]
+		reply["matured"] = stats["matured"]
+		reply["maturedTotal"] = stats["maturedTotal"]
+		reply["immature"] = stats["immature"]
+		reply["immatureTotal"] = stats["immatureTotal"]
+		reply["candidates"] = stats["candidates"]
+		reply["candidatesTotal"] = stats["candidatesTotal"]
+		reply["luck"] = stats["luck"]
 	}
-	reply["code"] = 0
-	reply["msg"] = "success"
 
 	err := json.NewEncoder(w).Encode(reply)
-	if err != nil {
-		log.Println("Error serializing API response: ", err)
-	}
-}
-
-func (s *ApiServer) BlocksMinerIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-	login_query := r.URL.Query().Get("login")
-	login := strings.ToLower(login_query)
-	if len(login) != 42 {
-		log.Println("Url Param 'login' is missing")
-		return
-	}
-
-	page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
-
-	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
-
-	if err_int != nil {
-		log.Println("Block Error serializing API page: ", err_int)
-	}
-	pageSize := limit
-	reply := make(map[string]interface{})
-	stats := make(map[string]interface{})
-	reply["pageSize"] = pageSize
-	reply["page"] = page
-	stats, err := s.backend.CollectMinerBlockStats(login, s.config.Blocks)
-	if stats != nil {
-		lowerBound := pageSize * (page - 1)
-		upperBound := pageSize * page
-		totalInt := int64(len(stats["minerBlockList"].([]*storage.BlockData)[:]))
-		if upperBound > totalInt {
-			upperBound = totalInt
-		}
-		reply["data"] = stats["minerBlockList"].([]*storage.BlockData)[lowerBound:upperBound]
-		reply["limit"] = int64(len(stats["minerBlockList"].([]*storage.BlockData)[lowerBound:upperBound]))
-		reply["numberPages"] = (totalInt + pageSize - 1) / pageSize
-		reply["count"] = totalInt
-	}
-	reply["code"] = 0
-	reply["msg"] = "success"
-	err = json.NewEncoder(w).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}

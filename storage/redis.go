@@ -614,9 +614,9 @@ func convertStringMap(m map[string]string) map[string]interface{} {
 }
 
 // WARNING: Must run it periodically to flush out of window hashrate entries
-func (r *RedisClient) FlushStaleStats(window, largeWindow time.Duration) (int64, error) {
+func (r *RedisClient) FlushStaleStats(largeWindow time.Duration) (int64, error) {
 	now := util.MakeTimestamp() / 1000
-	max := fmt.Sprint("(", now-int64(window/time.Second))
+	max := fmt.Sprint("(", now-int64(largeWindow/time.Second))
 	total, err := r.client.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", max).Result()
 	if err != nil {
 		return total, err
@@ -654,16 +654,17 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 	stats := make(map[string]interface{})
 	tx := r.client.Multi()
 	defer tx.Close()
-	now := util.MakeTimestamp() / 1000 /24 * 24
+	now := util.MakeTimestamp() / 1000
+	hours := now / 3600
 	hashrateList := make([]map[string]interface{}, 24, 24)
 	//fmt.Println("now is", now)
 	//fmt.Println("window is", window)
 	//fmt.Println("now - window is", now - window)
 	for i := int64(0); i < 24; i++ {
-		timestamp := now - (i+1)*3600
+		timestamp := (hours - i)*3600
 		cmdsTemp, _ := tx.Exec(func() error {
 			//tx.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", fmt.Sprint("(", timestamp-window))
-			tx.ZRangeByScoreWithScores(r.formatKey("hashrate"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp), Max: fmt.Sprint(timestamp + 3600)})
+			tx.ZRangeByScoreWithScores(r.formatKey("hashrate"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp-3600), Max: fmt.Sprint(timestamp)})
 			//tx.HGetAllMap(r.formatKey("stats"))
 			//tx.ZRevRangeWithScores(r.formatKey("blocks", "candidates"), 0, -1)
 			//tx.ZRevRangeWithScores(r.formatKey("blocks", "immature"), 0, -1)

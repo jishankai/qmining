@@ -127,7 +127,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 
 func (s *ApiServer) purgeStale() {
 	start := time.Now()
-	total, err := s.backend.FlushStaleStats(s.hashrateWindow, s.hashrateLargeWindow)
+	total, err := s.backend.FlushStaleStats(s.hashrateLargeWindow)
 	if err != nil {
 		log.Println("Failed to purge stale data from backend:", err)
 	} else {

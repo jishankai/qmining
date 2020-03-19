@@ -54,8 +54,7 @@ func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, param
 			return false, false
 		} else {
 			s.fetchBlockTemplate()
-			balance, _ := s.rpc().GetBalance(login)
-			exist, err := s.backend.WriteBlock(login, id, balance, params, shareDiff, h.diff.Int64(), h.height, s.hashrateExpiration)
+			exist, err := s.backend.WriteBlock(login, id, params, shareDiff, h.diff.Int64(), h.height, s.hashrateExpiration)
 			if exist {
 				return true, false
 			}
@@ -67,8 +66,7 @@ func (s *ProxyServer) processShare(login, id, ip string, t *BlockTemplate, param
 			log.Printf("Block found by miner %v@%v at height %d", login, ip, h.height)
 		}
 	} else {
-		balance, _ := s.rpc().GetBalance(login)
-		exist, err := s.backend.WriteShare(login, id, balance, params, shareDiff, h.height, s.hashrateExpiration)
+		exist, err := s.backend.WriteShare(login, id, params, shareDiff, h.height, s.hashrateExpiration)
 		if exist {
 			return true, false
 		}

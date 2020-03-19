@@ -23,10 +23,10 @@ type RedisClient struct {
 }
 
 type BlockData struct {
-	Height      int64 `json:"height"`
-	Timestamp   int64 `json:"timestamp"`
-	Difficulty  int64 `json:"difficulty"`
-	TotalShares int64 `json:"-"`
+	Height         int64    `json:"height"`
+	Timestamp      int64    `json:"timestamp"`
+	Difficulty     int64    `json:"difficulty"`
+	TotalShares    int64    `json:"shares"`
 	//Uncle          bool     `json:"uncle"`
 	//UncleHeight    int64    `json:"uncleHeight"`
 	Orphan         bool     `json:"orphan"`
@@ -70,9 +70,9 @@ func (b *BlockData) keys() string {
 }
 
 type Miner struct {
-	LastBeat  int64 `json:"lastBeat"`
-	HR        int64 `json:"hr"`
-	Offline   bool  `json:"offline"`
+	LastBeat  int64  `json:"lastBeat"`
+	HR        int64  `json:"hr"`
+	Offline   bool   `json:"offline"`
 	startedAt int64
 	MinerId   string `json:"minerId"`
 }
@@ -172,7 +172,7 @@ func (r *RedisClient) checkPoWExist(height uint64, params []string) (bool, error
 	return val == 0, err
 }
 
-func (r *RedisClient) WriteShare(login, id string, balance *big.Int, params []string, diff int64, height uint64, window time.Duration) (bool, error) {
+func (r *RedisClient) WriteShare(login, id string, params []string, diff int64, height uint64, window time.Duration) (bool, error) {
 	exist, err := r.checkPoWExist(height, params)
 	if err != nil {
 		return false, err
@@ -188,14 +188,14 @@ func (r *RedisClient) WriteShare(login, id string, balance *big.Int, params []st
 	ts := ms / 1000
 
 	_, err = tx.Exec(func() error {
-		r.writeShare(tx, ms, ts, login, id, balance, diff, window)
+		r.writeShare(tx, ms, ts, login, id, diff, window)
 		tx.HIncrBy(r.formatKey("stats"), "roundShares", diff)
 		return nil
 	})
 	return false, err
 }
 
-func (r *RedisClient) WriteBlock(login, id string, balance *big.Int, params []string, diff, roundDiff int64, height uint64, window time.Duration) (bool, error) {
+func (r *RedisClient) WriteBlock(login, id string, params []string, diff, roundDiff int64, height uint64, window time.Duration) (bool, error) {
 	exist, err := r.checkPoWExist(height, params)
 	if err != nil {
 		return false, err
@@ -211,7 +211,7 @@ func (r *RedisClient) WriteBlock(login, id string, balance *big.Int, params []st
 	ts := ms / 1000
 
 	cmds, err := tx.Exec(func() error {
-		r.writeShare(tx, ms, ts, login, id, balance, diff, window)
+		r.writeShare(tx, ms, ts, login, id, diff, window)
 		tx.HSet(r.formatKey("stats"), "lastBlockFound", strconv.FormatInt(ts, 10))
 		tx.HDel(r.formatKey("stats"), "roundShares")
 		tx.ZIncrBy(r.formatKey("finders"), 1, login)
@@ -236,13 +236,12 @@ func (r *RedisClient) WriteBlock(login, id string, balance *big.Int, params []st
 	}
 }
 
-func (r *RedisClient) writeShare(tx *redis.Multi, ms, ts int64, login, id string, balance *big.Int, diff int64, expire time.Duration) {
+func (r *RedisClient) writeShare(tx *redis.Multi, ms, ts int64, login, id string, diff int64, expire time.Duration) {
 	tx.HIncrBy(r.formatKey("shares", "roundCurrent"), login, diff)
 	tx.ZAdd(r.formatKey("hashrate"), redis.Z{Score: float64(ts), Member: join(diff, login, id, ms)})
 	tx.ZAdd(r.formatKey("hashrate", login), redis.Z{Score: float64(ts), Member: join(diff, id, ms)})
 	tx.Expire(r.formatKey("hashrate", login), expire) // Will delete hashrates for miners that gone
 	tx.HSet(r.formatKey("miners", login), "lastShare", strconv.FormatInt(ts, 10))
-	tx.HSet(r.formatKey("miners", login), "balance", balance.String())
 }
 
 func (r *RedisClient) formatKey(args ...interface{}) string {

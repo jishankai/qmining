@@ -18,10 +18,6 @@ import (
 	"github.com/sammy007/open-ethereum-pool/util"
 )
 
-var (
-	currentShardId string
-)
-
 type RPCClient struct {
 	sync.RWMutex
 	Url         string
@@ -132,7 +128,6 @@ func (r *RPCClient) GetWork(shardId string) ([]string, error) {
 }
 
 func (r *RPCClient) GetWorkWithID(shardId string, login string) ([]string, error) {
-	currentShardId = shardId
 	rpcResp, err := r.doPost(r.Url, "getWork", []string{shardId, login})
 	if err != nil {
 		return nil, err
@@ -271,34 +266,26 @@ func CompareHeight(reply_height string, correct_height string) bool {
 }
 
 func (r *RPCClient) GetBalance(address string) (*big.Int, error) {
-	qkcAddress := address + "000" + currentShardId[2:len(currentShardId)]
-	log.Printf("get balance  qkcAddress:,%v", qkcAddress)
-	rpcResp, err := r.doPost(r.Url, "getBalances", []string{qkcAddress})
+	rpcResp, err := r.doPost(r.Url, "getBalances", []string{address})
 	if err != nil {
-		log.Printf("get balance  err:,%v", err)
 		return nil, err
 	}
 	//var reply []string
 	var reply *AccountBalance
 	err = json.Unmarshal(*rpcResp.Result, &reply)
 	if err != nil {
-		log.Printf("get balance  err1:,%v", err)
 		return nil, err
 	}
-	var balanceInt64 int64
+	var balanceInt64 string
 	for _, balanceMap := range reply.Balance {
 		if balanceMap.TokenStr != "QKC" {
 			continue
 		}
-		balance, _ := new(big.Float).SetString(balanceMap.Balance)
-		log.Printf("get balancemap balance  :%v ", balanceMap.Balance)
-		ten9 := new(big.Int).Exp(big.NewInt(10), big.NewInt(9), big.NewInt(0))
-		log.Printf("get balance  :%v  and  two18:%v", balance, ten9)
-		balanceInt64, _ = new(big.Float).Quo(balance, big.NewFloat(float64(ten9.Int64()))).Int64()
+		balanceString = balanceMap.Balance
 	}
-	fmt.Println("balacneMap.Balance is:", balanceInt64)
-	//fmt.Println("balacneMap.Balance value is : ", util.String2Big(balanceString))
-	return big.NewInt(balanceInt64), err
+	fmt.Println("balacneMap.Balance is: %v", balanceString)
+	fmt.Println("balacneMap.Balance value is : %v", util.String2Big(balanceString))
+	return util.String2Big(balanceString), err
 }
 
 func (r *RPCClient) Sign(from string, s string) (string, error) {

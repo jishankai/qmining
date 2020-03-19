@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 )

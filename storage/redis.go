@@ -654,7 +654,7 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 	stats := make(map[string]interface{})
 	tx := r.client.Multi()
 	defer tx.Close()
-	now := util.MakeTimestamp() / 1000
+	now := util.MakeTimestamp() / 1000 /24 * 24
 	hashrateList := make([]map[string]interface{}, 24, 24)
 	//fmt.Println("now is", now)
 	//fmt.Println("window is", window)
@@ -677,7 +677,7 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 		})
 		//fmt.Println("current temstamp before", timestamp - 1080)
 		//fmt.Println("current timestamp: %v", timestamp)
-		totalHashrateTemp, _ := convertMinersStats(window/24, cmdsTemp[0].(*redis.ZSliceCmd))
+		totalHashrateTemp, _ := convertMinersStats(3600, cmdsTemp[0].(*redis.ZSliceCmd))
 		//fmt.Println("current totalHashrateTemp: %v", totalHashrateTemp)
 		//myString := "{timestamp:" + fmt.Sprintf("%v", timestamp) + ", hashrate:" + fmt.Sprintf("%v",totalHashrateTemp) + "}"
 		//hashrateList =  append(hashrateList, myString)

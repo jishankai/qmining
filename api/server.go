@@ -108,9 +108,7 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/blocks", s.BlocksIndex)
 	r.HandleFunc("/api/payments", s.PaymentsIndex)
 	r.HandleFunc("/api/accounts", s.AccountIndex)
-	r.HandleFunc("/api/QkcPrices", s.GetCoinQKC)
-	r.HandleFunc("/api/workers", s.GetWorkersIndex)
-	r.HandleFunc("/api/minersTotal", s.MinersTotalIndex)
+	r.HandleFunc("/api/workers", s.WorkersIndex)
 	r.HandleFunc("/api/blocksMiner", s.BlocksMinerIndex)
 	r.HandleFunc("/api/profits", s.ProfitIndex)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
@@ -125,34 +123,6 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusNotFound)
-}
-
-func (s *ApiServer) GetCoinQKC(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-	resp, err := http.Get("https://api.coingecko.com/api/v3/coins/quark-chain")
-	if err != nil {
-		log.Println(err)
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		// handle error
-		w.Write([]byte(err.Error()))
-	}
-	reply := make(map[string]interface{})
-	m := make(map[string]interface{})
-	err = json.Unmarshal(body, &m)
-	if err != nil {
-		log.Println("Error Unmarshal json: ", err)
-	}
-	reply["market_data"] = (m["market_data"].(map[string]interface{}))["current_price"]
-	err = json.NewEncoder(w).Encode(reply)
-	if err != nil {
-		log.Println("Error serializing API response: ", err)
-	}
 }
 
 func (s *ApiServer) purgeStale() {
@@ -184,7 +154,7 @@ func (s *ApiServer) collectStats() {
 	log.Printf("Stats collection finished %s", time.Since(start))
 }
 
-func (s *ApiServer) GetWorkersIndex(w http.ResponseWriter, r *http.Request) {
+func (s *ApiServer) WorkersIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -193,7 +163,7 @@ func (s *ApiServer) GetWorkersIndex(w http.ResponseWriter, r *http.Request) {
 	data := make(map[string]interface{})
 	miners, err := s.backend.GetWorkers(s.hashrateWindow)
 	if err != nil {
-		log.Println("GetWorkersIndex API err: ", err)
+		log.Println("WorkersIndex API err: ", err)
 	}
 	count := 0
 	for _, m := range miners {
@@ -230,6 +200,7 @@ func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
 		reply["stats"] = stats["stats"]
 		reply["hashrate"] = stats["hashrate"]
 		reply["minersTotal"] = stats["minersTotal"]
+		reply["minersOffline"] = stats["minersOffline"]
 		reply["maturedTotal"] = stats["maturedTotal"]
 		reply["immatureTotal"] = stats["immatureTotal"]
 		reply["candidatesTotal"] = stats["candidatesTotal"]
@@ -237,29 +208,6 @@ func (s *ApiServer) StatsIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = json.NewEncoder(w).Encode(reply)
-	if err != nil {
-		log.Println("Error serializing API response: ", err)
-	}
-}
-
-func (s *ApiServer) MinersTotalIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-
-	reply := make(map[string]interface{})
-	stats := s.getStats()
-	data := make(map[string]interface{})
-	if stats != nil {
-		reply["code"] = 0
-		data["now"] = util.MakeTimestamp()
-		data["minersTotal"] = stats["minersTotal"]
-		data["minersOffline"] = stats["minersOffline"]
-		reply["data"] = data
-		reply["msg"] = "success"
-	}
-	err := json.NewEncoder(w).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}

@@ -691,6 +691,7 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 
 	cmds, err := tx.Exec(func() error {
 		//tx.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", fmt.Sprint("(", now-window))
+		tx.ZRangeWithScores(r.formatKey("hashrate"), 0, -1) // placeholder
 		tx.ZRangeWithScores(r.formatKey("hashrate"), 0, -1)
 		tx.HGetAllMap(r.formatKey("stats"))
 		tx.ZRevRangeWithScores(r.formatKey("blocks", "candidates"), 0, -1)

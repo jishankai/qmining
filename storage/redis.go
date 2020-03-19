@@ -779,21 +779,20 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 	for i := int64(0); i < 24; i++ {
 		timestamp := (hours - i) * 3600
 		cmdsTemp, _ := tx.Exec(func() error {
-			tx.ZRangeByScoreWithScores(r.formatKey("hashrate", login), redis.ZRangeByScore{Min: fmt.Sprint(timeTemp - 3600), Max: fmt.Sprint(timeTemp)})
+			tx.ZRangeByScoreWithScores(r.formatKey("hashrate", login), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - 3600), Max: fmt.Sprint(timestamp)})
 			return nil
 		})
 		workersTemp := convertWorkersStats(smallWindow, cmdsTemp[0].(*redis.ZSliceCmd))
 		hashrateTemp := int64(0)
 
 		for _, workerTemp := range workersTemp {
-			boundary := 3600 // 1h
+			boundary := int64(3600) // 1h
 			workerTemp.TotalHR = workerTemp.TotalHR / boundary
 			hashrateTemp += workerTemp.TotalHR
 		}
-		//myString := "timestamp:" + fmt.Sprintf("%v", timeTemp) + ", hashrate:" + fmt.Sprintf("%v",hashrateTemp)
-		//hashrateList = append(hashrateList, myString)
+
 		value := make(map[string]interface{})
-		value["timestamp"] = fmt.Sprintf("%v", timeTemp)
+		value["timestamp"] = fmt.Sprintf("%v", timestamp)
 		value["hashrate"] = fmt.Sprintf("%v", hashrateTemp)
 		hashrateList[i] = value
 	}

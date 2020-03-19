@@ -276,7 +276,7 @@ func (r *RPCClient) GetBalance(address string) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	var balanceInt64 string
+	var balanceString string
 	for _, balanceMap := range reply.Balance {
 		if balanceMap.TokenStr != "QKC" {
 			continue

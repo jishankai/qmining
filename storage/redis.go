@@ -614,9 +614,9 @@ func convertStringMap(m map[string]string) map[string]interface{} {
 }
 
 // WARNING: Must run it periodically to flush out of window hashrate entries
-func (r *RedisClient) FlushStaleStats(largeWindow time.Duration) (int64, error) {
+func (r *RedisClient) FlushStaleStats(window, largeWindow time.Duration) (int64, error) {
 	now := util.MakeTimestamp() / 1000
-	max := fmt.Sprint("(", now-int64(largeWindow/time.Second))
+	max := fmt.Sprint("(", now-int64(window/time.Second))
 	total, err := r.client.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", max).Result()
 	if err != nil {
 		return total, err
@@ -661,10 +661,10 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 	//fmt.Println("window is", window)
 	//fmt.Println("now - window is", now - window)
 	for i := int64(0); i < 24; i++ {
-		timestamp := (hours - i)*3600
+		timestamp := (hours - i) * 3600
 		cmdsTemp, _ := tx.Exec(func() error {
 			//tx.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", fmt.Sprint("(", timestamp-window))
-			tx.ZRangeByScoreWithScores(r.formatKey("hashrate"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp-3600), Max: fmt.Sprint(timestamp)})
+			tx.ZRangeByScoreWithScores(r.formatKey("hashrate"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - 3600), Max: fmt.Sprint(timestamp)})
 			//tx.HGetAllMap(r.formatKey("stats"))
 			//tx.ZRevRangeWithScores(r.formatKey("blocks", "candidates"), 0, -1)
 			//tx.ZRevRangeWithScores(r.formatKey("blocks", "immature"), 0, -1)
@@ -690,7 +690,7 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 	stats["hashrateList"] = hashrateList
 
 	cmds, err := tx.Exec(func() error {
-		tx.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", fmt.Sprint("(", now-window))
+		//tx.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", fmt.Sprint("(", now-window))
 		tx.ZRangeWithScores(r.formatKey("hashrate"), 0, -1)
 		tx.HGetAllMap(r.formatKey("stats"))
 		tx.ZRevRangeWithScores(r.formatKey("blocks", "candidates"), 0, -1)
@@ -773,19 +773,20 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 	defer tx.Close()
 
 	now := util.MakeTimestamp() / 1000
+	hours := now / 3600
 
 	hashrateList := make([]map[string]interface{}, 24, 24)
 	for i := int64(0); i < 24; i++ {
-		timeTemp := now - (i+1)*3600
+		timestamp := (hours - i) * 3600
 		cmdsTemp, _ := tx.Exec(func() error {
-			tx.ZRangeByScoreWithScores(r.formatKey("hashrate", login), redis.ZRangeByScore{Min: fmt.Sprint(timeTemp), Max: fmt.Sprint(timeTemp + 3600)})
+			tx.ZRangeByScoreWithScores(r.formatKey("hashrate", login), redis.ZRangeByScore{Min: fmt.Sprint(timeTemp - 3600), Max: fmt.Sprint(timeTemp)})
 			return nil
 		})
 		workersTemp := convertWorkersStats(smallWindow, cmdsTemp[0].(*redis.ZSliceCmd))
 		hashrateTemp := int64(0)
 
 		for _, workerTemp := range workersTemp {
-			boundary := smallWindow / 24
+			boundary := 3600 // 1h
 			workerTemp.TotalHR = workerTemp.TotalHR / boundary
 			hashrateTemp += workerTemp.TotalHR
 		}
@@ -997,6 +998,7 @@ func convertWorkersStats(window int64, raw *redis.ZSliceCmd) map[string]Worker {
 		// Add for large window
 		worker.TotalHR += share
 
+		// Not used in QKC Mining Pool
 		// Add for small window if matches
 		if score >= now-window {
 			worker.HR += share

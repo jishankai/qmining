@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"sort"
@@ -127,7 +126,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 
 func (s *ApiServer) purgeStale() {
 	start := time.Now()
-	total, err := s.backend.FlushStaleStats(s.hashrateLargeWindow)
+	total, err := s.backend.FlushStaleStats(s.hashrateWindow, s.hashrateLargeWindow)
 	if err != nil {
 		log.Println("Failed to purge stale data from backend:", err)
 	} else {
@@ -377,23 +376,7 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache")
 
-	coinbase_query := r.URL.Query().Get("coinbase")
-	coinbase := strings.ToLower(coinbase_query)
-	if len(coinbase) != 42 {
-		log.Println("Url Param 'coinbase' is missing")
-		return
-	}
-
-	page, err_int := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
-
-	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
-
-	if err_int != nil || limit <= 0 {
-		return
-		log.Println("limit", limit)
-		log.Println("Account Error serializing API page: ", err_int)
-	}
-
+	coinbase := strings.ToLower(mux.Vars(r)["coinbase"])
 	s.minersMu.Lock()
 	defer s.minersMu.Unlock()
 
@@ -404,17 +387,7 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	if !ok || reply.updatedAt < now-cacheIntv {
 		exist, err := s.backend.IsMinerExists(coinbase)
 		if !exist {
-			w.WriteHeader(http.StatusOK)
-			okb := make(map[string]interface{})
-			okb["code"] = 0
-			okb["msg"] = "404"
-			okb["count"] = 0
-			okb["data"] = make([]string, 0)
-			err := json.NewEncoder(w).Encode(okb)
-			if err != nil {
-				log.Println("Error serializing API response: ", err)
-				log.Println("Url param 'coinbase' is missing")
-			}
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		if err != nil {
@@ -439,16 +412,6 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 			stats[key] = value
 		}
 		stats["pageSize"] = s.config.Payments
-		lowerBound := limit * (page - 1)
-		upperBound := limit * page
-		totalPayments := stats["paymentsTotal"].(int64)
-		if upperBound > totalPayments {
-			upperBound = totalPayments
-		}
-		stats["payments"] = stats["payments"].([]map[string]interface{})[lowerBound:upperBound]
-		stats["code"] = 0
-		stats["msg"] = ""
-		stats["count"] = totalPayments
 		reply = &Entry{stats: stats, updatedAt: now}
 		s.miners[coinbase] = reply
 	}

@@ -106,7 +106,6 @@ func (s *ApiServer) listen() {
 	r.HandleFunc("/api/blocks", s.BlocksIndex)
 	r.HandleFunc("/api/payments", s.PaymentsIndex)
 	r.HandleFunc("/api/accounts/{login:0x[0-9a-fA-F]{40}}", s.AccountIndex)
-	r.HandleFunc("/api/profits", s.ProfitIndex)
 	r.NotFoundHandler = http.HandlerFunc(notFound)
 	err := http.ListenAndServe(s.config.Listen, r)
 	if err != nil {
@@ -221,32 +220,6 @@ func (s *ApiServer) BlocksIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := json.NewEncoder(w).Encode(reply)
-	if err != nil {
-		log.Println("Error serializing API response: ", err)
-	}
-}
-
-func (s *ApiServer) ProfitIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-	login_query := r.URL.Query().Get("login")
-	login := strings.ToLower(login_query)
-	if len(login) != 42 {
-		log.Println("Url Param 'login' is missing")
-		return
-	}
-	reply := make(map[string]interface{})
-	stats := make(map[string]interface{})
-
-	stats, err := s.backend.CollectProfits(login)
-	if stats != nil {
-		reply["profitList"] = stats["profitList"]
-	}
-	reply["code"] = 0
-	reply["msg"] = "success"
-	err = json.NewEncoder(w).Encode(reply)
 	if err != nil {
 		log.Println("Error serializing API response: ", err)
 	}

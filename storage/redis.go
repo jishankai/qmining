@@ -563,7 +563,6 @@ func (r *RedisClient) writeMaturedBlock(tx *redis.Multi, block *BlockData) {
 	tx.Del(r.formatRound(block.RoundHeight, block.Nonce))
 	tx.ZRem(r.formatKey("blocks", "immature"), block.immatureKey)
 	tx.ZAdd(r.formatKey("blocks", "matured"), redis.Z{Score: float64(block.Height), Member: block.key()})
-	tx.ZAdd(r.formatKey("tsblocks", "matured"), redis.Z{Score: float64(block.Timestamp), Member: block.keys()})
 }
 
 func (r *RedisClient) IsMinerExists(login string) (bool, error) {
@@ -739,29 +738,6 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 	stats["minersTotal"] = len(miners)
 	stats["minersOffline"] = count
 	stats["hashrate"] = totalHashrate
-	return stats, nil
-}
-
-func (r *RedisClient) CollectProfits(login string) (map[string]interface{}, error) {
-	stats := make(map[string]interface{})
-	tx := r.client.Multi()
-	defer tx.Close()
-	now := util.MakeTimestamp() / 1000
-	profitList := make([]map[string]interface{}, 24, 24)
-	for i := int64(0); i < 24; i++ {
-		timestamp := now - (i+1)*3600
-		cmdsTemp, _ := tx.Exec(func() error {
-			tx.ZRangeByScoreWithScores(r.formatKey("tsblocks", "matured"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp), Max: fmt.Sprint(timestamp + 3600)})
-			return nil
-		})
-		total, _ := convertMinerProfit(cmdsTemp[0].(*redis.ZSliceCmd), login)
-		value := make(map[string]interface{})
-		value["timestamp"] = fmt.Sprintf("%v", timestamp)
-		value["profit"] = total
-		profitList[i] = value
-	}
-	stats["profitList"] = profitList
-
 	return stats, nil
 }
 
@@ -1040,34 +1016,6 @@ func convertMinersStats(window int64, raw *redis.ZSliceCmd) (int64, map[string]M
 		miners[id] = miner
 	}
 	return totalHashrate, miners
-}
-
-func convertMinerProfit(raw *redis.ZSliceCmd, login string) (*big.Int, []*BlockData) {
-	blocks := make(map[string]BlockData)
-	var blockList []*BlockData
-	total := big.NewInt(0)
-	count := int64(0)
-	for _, v := range raw.Val() {
-		parts := strings.Split(v.Member.(string), ":")
-		id := parts[3]
-		block := blocks[id]
-		block.Orphan, _ = strconv.ParseBool(parts[0])
-		block.Hash = parts[2]
-		block.Timestamp = int64(v.Score)
-		block.Nonce = parts[1]
-		block.RewardString = parts[6]
-		block.Height, _ = strconv.ParseInt(parts[3], 10, 64)
-		block.Difficulty, _ = strconv.ParseInt(parts[4], 10, 64)
-		block.Reward, _ = new(big.Int).SetString(parts[6], 10)
-		block.Coinbase = parts[7]
-		blocks[id] = block
-		blockList = append(blockList, &block)
-	}
-	for _, block := range blocks {
-		count++
-		total.Add(total, block.Reward)
-	}
-	return total, blockList
 }
 
 func convertPaymentsResults(raw *redis.ZSliceCmd) []map[string]interface{} {

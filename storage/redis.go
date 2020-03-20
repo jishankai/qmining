@@ -223,7 +223,7 @@ func (r *RedisClient) WriteBlock(login, id string, params []string, diff, roundD
 	if err != nil {
 		return false, err
 	} else {
-		sharesMap, _ := cmds[11].(*redis.StringStringMapCmd).Result()
+		sharesMap, _ := cmds[10].(*redis.StringStringMapCmd).Result()
 		totalShares := int64(0)
 		for _, v := range sharesMap {
 			n, _ := strconv.ParseInt(v, 10, 64)
@@ -615,7 +615,8 @@ func convertStringMap(m map[string]string) map[string]interface{} {
 // WARNING: Must run it periodically to flush out of window hashrate entries
 func (r *RedisClient) FlushStaleStats(window, largeWindow time.Duration) (int64, error) {
 	now := util.MakeTimestamp() / 1000
-	max := fmt.Sprint("(", now-int64(window/time.Second))
+	// window unecessary
+	max := fmt.Sprint("(", now-int64(largeWindow/time.Second))
 	total, err := r.client.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", max).Result()
 	if err != nil {
 		return total, err

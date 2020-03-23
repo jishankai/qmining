@@ -251,8 +251,6 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 
 	login := strings.ToLower(mux.Vars(r)["login"])
-	s.minersMu.Lock()
-	defer s.minersMu.Unlock()
 
 	reply, ok := s.miners[login]
 	now := util.MakeTimestamp()
@@ -276,6 +274,13 @@ func (s *ApiServer) AccountIndex(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Failed to fetch stats from backend: %v", err)
 			return
 		}
+		balance, err := s.backend.GetBalance(login)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Printf("Failed to fetch stats from backend: %v", err)
+			return
+		}
+		stats["balance"] = balance;
 		workers, err := s.backend.CollectWorkersStats(s.hashrateWindow, s.hashrateLargeWindow, login)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

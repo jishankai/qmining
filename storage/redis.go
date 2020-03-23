@@ -614,7 +614,7 @@ func convertStringMap(m map[string]string) map[string]interface{} {
 // WARNING: Must run it periodically to flush out of window hashrate entries
 func (r *RedisClient) FlushStaleStats(window, largeWindow time.Duration) (int64, error) {
 	now := util.MakeTimestamp() / 1000
-	// window unecessary
+	// smallHashWindow is unecessary
 	max := fmt.Sprint("(", now-int64(largeWindow/time.Second))
 	total, err := r.client.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", max).Result()
 	if err != nil {
@@ -654,13 +654,14 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 	tx := r.client.Multi()
 	defer tx.Close()
 	now := util.MakeTimestamp() / 1000
-	hours := now / 3600
 	hashrateList := make([]map[string]interface{}, 24, 24)
+	hashrateWeeklyList := make([]map[string]interface{}, 14, 14)
+	hashrateMonthlyList := make([]map[string]interface{}, 30, 30)
 	//fmt.Println("now is", now)
 	//fmt.Println("window is", window)
 	//fmt.Println("now - window is", now - window)
 	for i := int64(0); i < 24; i++ {
-		timestamp := (hours - i) * 3600
+		timestamp := (now / 3600 - i) * 3600
 		cmdsTemp, _ := tx.Exec(func() error {
 			//tx.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", fmt.Sprint("(", timestamp-window))
 			tx.ZRangeByScoreWithScores(r.formatKey("hashrate"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - 3600), Max: fmt.Sprint(timestamp)})
@@ -687,6 +688,34 @@ func (r *RedisClient) CollectStats(smallWindow time.Duration, maxBlocks, maxPaym
 		hashrateList[i] = value
 	}
 	stats["hashrateList"] = hashrateList
+
+	for i := int64(0); i < 14; i++ {
+		timestamp := (now / 3600 / 12 - i) * 3600 * 12
+		cmdsTemp, _ := tx.Exec(func() error {
+			tx.ZRangeByScoreWithScores(r.formatKey("hashrate"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - (3600 * 12)), Max: fmt.Sprint(timestamp)})
+			return nil
+		})
+		totalHashrateTemp, _ := convertMinersStats(3600 * 12, cmdsTemp[0].(*redis.ZSliceCmd))
+		value := make(map[string]interface{})
+		value["timestamp"] = fmt.Sprintf("%v", timestamp)
+		value["hashrate"] = fmt.Sprintf("%v", totalHashrateTemp)
+		hashrateWeeklyList[i] = value
+	}
+	stats["hashrateWeeklyList"] = hashrateWeeklyList
+
+	for i := int64(0); i < 30; i++ {
+		timestamp := (now / 3600 / 24 / 30 - i) * 3600 * 24 * 30
+		cmdsTemp, _ := tx.Exec(func() error {
+			tx.ZRangeByScoreWithScores(r.formatKey("hashrate"), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - 3600 * 24 * 30), Max: fmt.Sprint(timestamp)})
+			return nil
+		})
+		totalHashrateTemp, _ := convertMinersStats(3600 * 24 * 30, cmdsTemp[0].(*redis.ZSliceCmd))
+		value := make(map[string]interface{})
+		value["timestamp"] = fmt.Sprintf("%v", timestamp)
+		value["hashrate"] = fmt.Sprintf("%v", totalHashrateTemp)
+		hashrateMonthlyList[i] = value
+	}
+	stats["hashrateMonthlyList"] = hashrateMonthlyList
 
 	cmds, err := tx.Exec(func() error {
 		//tx.ZRemRangeByScore(r.formatKey("hashrate"), "-inf", fmt.Sprint("(", now-window))

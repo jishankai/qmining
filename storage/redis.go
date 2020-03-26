@@ -302,14 +302,6 @@ func (r *RedisClient) GetImmatureBlocks(maxHeight int64) ([]*BlockData, error) {
 	return convertBlockResults(cmd), nil
 }
 
-func (r *RedisClient) GetMinerBlocks(login string) ([]*BlockData, error) {
-	cmd := r.client.ZRevRangeWithScores(r.formatKey("blocks", login), 0, -1)
-	if cmd.Err() != nil {
-		return nil, cmd.Err()
-	}
-	return convertBlockResults(cmd), nil
-}
-
 func (r *RedisClient) GetRoundShares(height int64, nonce string) (map[string]int64, error) {
 	result := make(map[string]int64)
 	cmd := r.client.HGetAllMap(r.formatRound(height, nonce))
@@ -857,6 +849,7 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 	cmds, err := tx.Exec(func() error {
 		tx.ZRemRangeByScore(r.formatKey("hashrate", login), "-inf", fmt.Sprint("(", now-largeWindow))
 		tx.ZRangeWithScores(r.formatKey("hashrate", login), 0, -1)
+		tx.ZRevRangeWithScores(r.formatKey("blocks", login), 0, -1)
 		return nil
 	})
 
@@ -869,6 +862,7 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 	online := int64(0)
 	offline := int64(0)
 	workers := convertWorkersStats(smallWindow, cmds[1].(*redis.ZSliceCmd))
+	blocks := convertBlockResults(cmds[2].(*redis.ZSliceCmd))
 
 	for id, worker := range workers {
 		timeOnline := now - worker.startedAt
@@ -918,10 +912,11 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 			return nil
 		})
 		blocksTemp := convertBlockResults(cmdsTemp[0].(*redis.ZSliceCmd))
-		rewardTemp := int64(0)
+		rewardTemp := big.NewInt(0)
 
 		for _, blockTemp := range blocksTemp {
-			rewardTemp += new(big.Int).SetString(blockTemp.RewardString)
+			reward, _ := new(big.Int).SetString(blockTemp.RewardString, 10)
+			rewardTemp.Add(rewardTemp, reward)
 		}
 
 		value := make(map[string]interface{})
@@ -937,10 +932,11 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 		})
 
 		blocksTemp := convertBlockResults(cmdsTemp[0].(*redis.ZSliceCmd))
-		rewardTemp := int64(0)
+		rewardTemp := big.NewInt(0)
 
 		for _, blockTemp := range blocksTemp {
-			rewardTemp += new(big.Int).SetString(blockTemp.RewardString)
+			reward, _ := new(big.Int).SetString(blockTemp.RewardString, 10)
+			rewardTemp.Add(rewardTemp, reward)
 		}
 
 		value := make(map[string]interface{})
@@ -957,10 +953,11 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 		})
 
 		blocksTemp := convertBlockResults(cmdsTemp[0].(*redis.ZSliceCmd))
-		rewardTemp := int64(0)
+		rewardTemp := big.NewInt(0)
 
 		for _, blockTemp := range blocksTemp {
-			rewardTemp += new(big.Int).SetString(blockTemp.RewardString)
+			reward, _ := new(big.Int).SetString(blockTemp.RewardString, 10)
+			rewardTemp.Add(rewardTemp, reward)
 		}
 
 		value := make(map[string]interface{})
@@ -970,10 +967,6 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 		rewardMonthlyList[i] = value
 	}
 
-	blocks, err := GetMinerBlocks(login)
-	if err != nil {
-		return nil, err
-	}
 
 	stats["workers"] = s
 	stats["workersTotal"] = len(workers)

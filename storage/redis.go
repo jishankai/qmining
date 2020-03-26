@@ -302,6 +302,14 @@ func (r *RedisClient) GetImmatureBlocks(maxHeight int64) ([]*BlockData, error) {
 	return convertBlockResults(cmd), nil
 }
 
+func (r *RedisClient) GetMinerBlocks(login string) ([]*BlockData, error) {
+	cmd := r.client.ZRevRangeWithScores(r.formatKey("blocks", login), 0, -1)
+	if cmd.Err() != nil {
+		return nil, cmd.Err()
+	}
+	return convertBlockResults(cmd), nil
+}
+
 func (r *RedisClient) GetRoundShares(height int64, nonce string) (map[string]int64, error) {
 	result := make(map[string]int64)
 	cmd := r.client.HGetAllMap(r.formatRound(height, nonce))
@@ -563,6 +571,7 @@ func (r *RedisClient) writeMaturedBlock(tx *redis.Multi, block *BlockData) {
 	tx.Del(r.formatRound(block.RoundHeight, block.Nonce))
 	tx.ZRem(r.formatKey("blocks", "immature"), block.immatureKey)
 	tx.ZAdd(r.formatKey("blocks", "matured"), redis.Z{Score: float64(block.Height), Member: block.key()})
+	tx.ZAdd(r.formatKey("blocks", block.Coinbase), redis.Z{Score: float64(block.Timestamp), Member: block.key()})
 }
 
 func (r *RedisClient) IsMinerExists(login string) (bool, error) {
@@ -844,6 +853,7 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 		hashrateMonthlyList[i] = value
 	}
 
+
 	cmds, err := tx.Exec(func() error {
 		tx.ZRemRangeByScore(r.formatKey("hashrate", login), "-inf", fmt.Sprint("(", now-largeWindow))
 		tx.ZRangeWithScores(r.formatKey("hashrate", login), 0, -1)
@@ -897,6 +907,74 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 		s[i].Miner.MinerId = login
 		i++
 	}
+
+	rewardList:= make([]map[string]interface{}, 24, 24)
+	rewardWeeklyList := make([]map[string]interface{}, 14, 14)
+	rewardMonthlyList := make([]map[string]interface{}, 30, 30)
+	for i := int64(0); i < 24; i++ {
+		timestamp := (now / 3600 - i) * 3600
+		cmdsTemp, _ := tx.Exec(func() error {
+			tx.ZRangeByScoreWithScores(r.formatKey("blocks", login), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - 3600), Max: fmt.Sprint(timestamp)})
+			return nil
+		})
+		blocksTemp := convertBlockResults(cmdsTemp[0].(*redis.ZSliceCmd))
+		rewardTemp := int64(0)
+
+		for _, blockTemp := range blocksTemp {
+			rewardTemp += new(big.Int).SetString(blockTemp.RewardString)
+		}
+
+		value := make(map[string]interface{})
+		value["timestamp"] = fmt.Sprintf("%v", timestamp)
+		value["reward"] = fmt.Sprintf("%v", rewardTemp)
+		rewardList[i] = value
+	}
+	for i := int64(0); i < 14; i++ {
+		timestamp := (now / 3600 / 12 - i) * 3600 * 12
+		cmdsTemp, _ := tx.Exec(func() error {
+			tx.ZRangeByScoreWithScores(r.formatKey("blocks", login), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - 3600 * 12), Max: fmt.Sprint(timestamp)})
+			return nil
+		})
+
+		blocksTemp := convertBlockResults(cmdsTemp[0].(*redis.ZSliceCmd))
+		rewardTemp := int64(0)
+
+		for _, blockTemp := range blocksTemp {
+			rewardTemp += new(big.Int).SetString(blockTemp.RewardString)
+		}
+
+		value := make(map[string]interface{})
+		value["timestamp"] = fmt.Sprintf("%v", timestamp)
+		value["reward"] = fmt.Sprintf("%v", rewardTemp)
+
+		rewardWeeklyList[i] = value
+	}
+	for i := int64(0); i < 30; i++ {
+		timestamp := (now / 3600 / 24 - i) * 3600 * 24
+		cmdsTemp, _ := tx.Exec(func() error {
+			tx.ZRangeByScoreWithScores(r.formatKey("blocks", login), redis.ZRangeByScore{Min: fmt.Sprint(timestamp - 3600 * 24), Max: fmt.Sprint(timestamp)})
+			return nil
+		})
+
+		blocksTemp := convertBlockResults(cmdsTemp[0].(*redis.ZSliceCmd))
+		rewardTemp := int64(0)
+
+		for _, blockTemp := range blocksTemp {
+			rewardTemp += new(big.Int).SetString(blockTemp.RewardString)
+		}
+
+		value := make(map[string]interface{})
+		value["timestamp"] = fmt.Sprintf("%v", timestamp)
+		value["reward"] = fmt.Sprintf("%v", rewardTemp)
+
+		rewardMonthlyList[i] = value
+	}
+
+	blocks, err := GetMinerBlocks(login)
+	if err != nil {
+		return nil, err
+	}
+
 	stats["workers"] = s
 	stats["workersTotal"] = len(workers)
 	stats["workersOnline"] = online
@@ -906,6 +984,10 @@ func (r *RedisClient) CollectWorkersStats(sWindow, lWindow time.Duration, login 
 	stats["hashrateList"] = hashrateList
 	stats["hashrateWeeklyList"] = hashrateWeeklyList
 	stats["hashrateMonthlyList"] = hashrateMonthlyList
+	stats["rewardList"] = rewardList
+	stats["rewardWeeklyList"] = rewardWeeklyList
+	stats["rewardMonthlyList"] = rewardMonthlyList
+	stats["blocks"] = blocks
 	return stats, nil
 }
 
@@ -1003,9 +1085,7 @@ func convertBlockResults(rows ...*redis.ZSliceCmd) []*BlockData {
 			block.TotalShares, _ = strconv.ParseInt(fields[5], 10, 64)
 			block.RewardString = fields[6]
 			block.ImmatureReward = fields[6]
-			if len(fields) == 8 {
-				block.Coinbase = fields[7]
-			}
+			block.Coinbase = fields[7]
 			block.immatureKey = v.Member.(string)
 			result = append(result, &block)
 		}
